@@ -4,8 +4,8 @@ packages = [
     { include = "artifact-backend" },
 ]
 version = "2.4.1"
-description = "A template for Python projects, using Poetry"
-authors = ["Giovanni Ciatto <giovanni.ciatto@unibo.it>"]
+description = "Backend of a web application that automates the phone helpdesk of the Campus of Cesena"
+authors = ["Sara Ladisa <sara.ladisa@studio.unibo.it>", "Giulio Salotti <giulio.salotti@studio.unibo.it>"]
 license = "Apache 2.0"
 readme = "README.md"
 

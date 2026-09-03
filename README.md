@@ -165,3 +165,66 @@ the pull-requests it opens, even if all tests pass.
 To do so, please follow the instructions available [here](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-auto-merge-for-pull-requests-in-your-repository#managing-auto-merge).
 
 > Notice that the combination between Renovate, and Semantic Release may lead to a number of releases being created automatically.
+
+---
+
+# PRONTO — Testing
+
+> The sections above still describe the original project template and do not
+> reflect PRONTO. This section does.
+
+## Running the tests
+
+```bash
+poetry install
+poetry run poe test              # run the suite
+poetry run poe coverage          # run with coverage
+poetry run poe coverage-report   # print the coverage report
+poetry run poe static-checks     # ruff + mypy
+poetry run poe format            # apply formatting (CI checks it)
+```
+
+## Test database
+
+Tests run against an **in-memory SQLite** database, configured in
+`pronto/settings.py`. Development and production keep using PostgreSQL.
+
+This means tests need neither credentials nor network access: they run
+identically on your machine and on CI, where `.env` does not exist, and the
+whole suite takes well under a second.
+
+The trade-off is that SQLite is not PostgreSQL. Behaviour may diverge on
+PostgreSQL-specific fields, some constraints, and transactions. Anything that
+depends on PostgreSQL semantics must be verified by running the app for real
+against the development database.
+
+## How we write tests (TDD)
+
+We follow test-driven development where it pays off, not dogmatically.
+
+**Write the test first for:**
+- domain logic (booking rules, validation, slot availability, conflicts)
+- API endpoint behaviour — given this request, expect this status and this JSON
+
+**Do not write tests for:**
+- migrations, `settings`, admin registrations, purely declarative serializers
+
+Testing those means testing Django, not our code, and produces brittle tests
+that break on every refactor.
+
+The cycle: write a failing test → minimal code to make it pass → refactor.
+
+## Test layout
+
+All tests live in `tests/`, not in `booking/tests.py`. CI points at `tests/`.
+
+Two reference examples to copy from:
+- `tests/test_health.py` — endpoint test using DRF's `APIClient`
+- `tests/test_database.py` — database test using the `@pytest.mark.django_db`
+  marker, which gives each test a clean, isolated database
+
+## Endpoints
+
+| Method | Path            | Description                      |
+|--------|-----------------|----------------------------------|
+| GET    | `/api/health/`  | Health check, returns `{"status": "ok"}` |

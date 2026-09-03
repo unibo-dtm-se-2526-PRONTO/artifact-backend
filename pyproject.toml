@@ -1,8 +1,6 @@
 [tool.poetry]
 name = "artifact-backend"
-packages = [
-    { include = "artifact-backend" },
-]
+package-mode = false
 version = "2.4.1"
 description = "Backend of a web application that automates the phone helpdesk of the Campus of Cesena"
 authors = ["Sara Ladisa <sara.ladisa@studio.unibo.it>", "Giulio Salotti <giulio.salotti@studio.unibo.it>"]
@@ -36,8 +34,8 @@ ruff-check = "ruff check"
 ruff-fix = "ruff check --fix"
 format = "ruff format"
 format-check = "ruff format --check"
-mypy = "mypy artifact-backend tests"
-compile = "python -m compileall artifact-backend tests"
+mypy = "mypy pronto booking tests"
+compile = "python -m compileall pronto booking tests"
 static-checks = [
     "ruff-check",
     "mypy",
@@ -46,3 +44,13 @@ static-checks = [
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "pronto.settings"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--strict-markers"
+
+[tool.mypy]
+# Django does not ship type stubs (no py.typed marker)
+ignore_missing_imports = true

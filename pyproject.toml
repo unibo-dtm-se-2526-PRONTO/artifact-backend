@@ -34,8 +34,8 @@ ruff-check = "ruff check"
 ruff-fix = "ruff check --fix"
 format = "ruff format"
 format-check = "ruff format --check"
-mypy = "mypy pronto booking tests"
-compile = "python -m compileall pronto booking tests"
+mypy = "mypy pronto accounts booking tests"
+compile = "python -m compileall pronto accounts booking tests"
 static-checks = [
     "ruff-check",
     "mypy",

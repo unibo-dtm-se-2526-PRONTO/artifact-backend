@@ -225,6 +225,29 @@ Two reference examples to copy from:
 
 ## Endpoints
 
-| Method | Path            | Description                      |
-|--------|-----------------|----------------------------------|
-| GET    | `/api/health/`  | Health check, returns `{"status": "ok"}` |
+All endpoints require a token (`Authorization: Token <key>`) except where the
+Auth column says "public". The project-wide defaults are `TokenAuthentication`
+and `IsAuthenticated`, set in `pronto/settings.py`.
+
+| Method | Path                   | Auth   | Description                                      |
+|--------|------------------------|--------|--------------------------------------------------|
+| GET    | `/api/health/`         | public | Health check, returns `{"status": "ok"}`         |
+| POST   | `/api/auth/register/`  | public | Create an account; `role` is derived from the email domain |
+| POST   | `/api/auth/login/`     | public | Exchange email and password for a token          |
+| POST   | `/api/auth/logout/`    | token  | Delete the caller's token                        |
+| GET    | `/api/auth/me/`        | token  | The authenticated user's own data                |
+
+## Accounts
+
+The user model is `accounts.User`; always reference it as
+`settings.AUTH_USER_MODEL` in foreign keys, never by importing it directly.
+
+Users log in with their institutional email, which also determines their role
+and cannot be chosen by the client:
+
+| Email domain        | Role       |
+|---------------------|------------|
+| `@studio.unibo.it`  | `STUDENT`  |
+| `@unibo.it`         | `EMPLOYEE` |
+
+Any other domain is rejected with `400`.

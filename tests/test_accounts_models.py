@@ -45,6 +45,37 @@ def test_password_is_hashed_and_not_stored_in_clear_text():
 
 
 @pytest.mark.django_db
+def test_new_user_is_inactive_until_the_email_is_verified():
+    user = User.objects.create_user(
+        email="mario.rossi@studio.unibo.it",
+        password="s3cret-passphrase",
+        role=User.Role.STUDENT,
+    )
+
+    assert not user.is_active
+
+
+@pytest.mark.django_db
+def test_email_is_stored_lowercase():
+    user = User.objects.create_user(
+        email="Mario.Rossi@Studio.Unibo.it",
+        password="s3cret-passphrase",
+        role=User.Role.STUDENT,
+    )
+
+    assert user.email == "mario.rossi@studio.unibo.it"
+
+
+@pytest.mark.django_db
+def test_superuser_is_active_and_does_not_need_verification():
+    admin = User.objects.create_superuser(
+        email="admin@unibo.it", password="s3cret-passphrase"
+    )
+
+    assert admin.is_active and admin.is_staff and admin.is_superuser
+
+
+@pytest.mark.django_db
 def test_email_must_be_unique():
     User.objects.create_user(
         email="mario.rossi@studio.unibo.it",

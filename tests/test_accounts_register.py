@@ -110,6 +110,75 @@ def test_duplicate_email_is_rejected(client):
 
 
 @pytest.mark.django_db
+def test_registered_user_is_inactive_until_verified(client):
+    client.post(
+        URL,
+        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        format="json",
+    )
+
+    assert not User.objects.get(email="mario.rossi@studio.unibo.it").is_active
+
+
+@pytest.mark.django_db
+def test_registration_sends_a_verification_email(client, mailoutbox):
+    client.post(
+        URL,
+        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        format="json",
+    )
+
+    assert len(mailoutbox) == 1
+    assert mailoutbox[0].to == ["mario.rossi@studio.unibo.it"]
+
+
+@pytest.mark.django_db
+def test_email_is_normalised_to_lowercase(client):
+    client.post(
+        URL,
+        {"email": "Mario.Rossi@Studio.Unibo.it", "password": "s3cret-passphrase"},
+        format="json",
+    )
+
+    assert User.objects.get().email == "mario.rossi@studio.unibo.it"
+
+
+@pytest.mark.django_db
+def test_the_same_address_cannot_be_registered_twice_in_a_different_case(client):
+    client.post(
+        URL,
+        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        format="json",
+    )
+
+    response = client.post(
+        URL,
+        {"email": "Mario.Rossi@Studio.Unibo.it", "password": "s3cret-passphrase"},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert User.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_password_too_similar_to_the_email_is_rejected(client):
+    # Only caught because the password is validated against the user instance.
+    response = client.post(
+        URL,
+        {
+            "email": "mario.rossi@studio.unibo.it",
+            "password": "mario.rossi@studio.unibo.it",
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "password" in response.json()
+    assert not User.objects.exists()
+
+
+@pytest.mark.django_db
 def test_registration_does_not_require_authentication(client):
     response = client.post(
         URL,

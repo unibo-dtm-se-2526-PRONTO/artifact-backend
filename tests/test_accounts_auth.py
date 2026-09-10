@@ -26,6 +26,7 @@ def user(db):
         email="mario.rossi@studio.unibo.it",
         password=PASSWORD,
         role=User.Role.STUDENT,
+        is_active=True,  # already verified: these tests are about logging in
     )
 
 
@@ -65,6 +66,49 @@ def test_login_with_unknown_email_is_rejected(client):
     )
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_login_with_a_different_case_email_succeeds(client, user):
+    response = client.post(
+        LOGIN_URL,
+        {"email": "Mario.Rossi@Studio.Unibo.it", "password": PASSWORD},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.django_db
+def test_unverified_user_cannot_log_in(client, user):
+    user.is_active = False
+    user.save()
+
+    response = client.post(
+        LOGIN_URL, {"email": user.email, "password": PASSWORD}, format="json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert not Token.objects.filter(user=user).exists()
+
+
+@pytest.mark.django_db
+def test_unverified_user_gets_the_same_error_as_a_wrong_password(client, user):
+    # Deliberate: a specific "not verified" message would reveal that the
+    # address belongs to a registered account.
+    user.is_active = False
+    user.save()
+    unverified = client.post(
+        LOGIN_URL, {"email": user.email, "password": PASSWORD}, format="json"
+    )
+
+    user.is_active = True
+    user.save()
+    wrong_password = client.post(
+        LOGIN_URL, {"email": user.email, "password": "wrong-passphrase"}, format="json"
+    )
+
+    assert unverified.json() == wrong_password.json()
 
 
 @pytest.mark.django_db

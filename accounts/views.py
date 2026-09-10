@@ -5,13 +5,32 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
+from .verification import activate, send_verification_email
 
 
 class RegisterView(generics.CreateAPIView):
     """Create an account. Public: the caller has no token yet."""
 
-    serializer_class = RegisterSerializer
+    serializer_class = RegisterSerializer  # delega tutta la logica al serializer
     permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+        # The account is created inactive; the link in this email activates it.
+        send_verification_email(serializer.save())
+
+
+class VerifyEmailView(APIView):
+    """Activate the account the verification link points to."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, uidb64, token):
+        if activate(uidb64, token) is None:
+            return Response(
+                {"detail": "This verification link is invalid or has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"detail": "Account verified."}, status=status.HTTP_200_OK)
 
 
 class LoginView(APIView):

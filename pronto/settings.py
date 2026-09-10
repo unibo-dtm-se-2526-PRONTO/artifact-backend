@@ -65,6 +65,9 @@ CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
 
 AUTH_USER_MODEL = "accounts.User"
 
+# These two defaults are load-bearing, not conveniences: LogoutView and MeView
+# in accounts/views.py declare no permission_classes of their own and rely on
+# IsAuthenticated being the default. Loosening it here silently opens them.
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",

@@ -13,5 +13,7 @@ def test_health_endpoint_returns_ok():
 
     response = client.get("/api/health/")
 
-    assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.status_code == status.HTTP_200_OK
+    )  # assert controlla il risultato dopo aver eseguito il test
     assert response.json() == {"status": "ok"}

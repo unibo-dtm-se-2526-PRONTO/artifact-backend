@@ -9,6 +9,7 @@ every "can be booked" case needs.
 """
 
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -47,6 +48,22 @@ def test_available_slots_spans_the_opening_hours(office, employee, day):
     # The last slot starts half an hour before closing, so it ends at 17:00.
     assert slots[-1] == slot_at(day, 16, 30)
     assert len(slots) == 16
+
+
+@pytest.mark.django_db
+def test_available_slots_are_expressed_in_italian_local_time(office, employee, day):
+    """The timetable is the helpdesk's, not the server's.
+
+    Every other test here compares slots to `slot_at`, which builds them in
+    whatever timezone is active, so the whole suite would keep passing if
+    TIME_ZONE went back to UTC — and students would be offered 11:00-19:00.
+    This one reads the instant against Europe/Rome explicitly, so that change
+    fails here instead of in production.
+    """
+    slots = available_slots(office, day)
+
+    assert slots[0].astimezone(ZoneInfo("Europe/Rome")).hour == 9
+    assert slots[-1].astimezone(ZoneInfo("Europe/Rome")).hour == 16
 
 
 @pytest.mark.django_db
@@ -158,6 +175,33 @@ def test_two_bookings_at_the_same_slot_get_different_employees(
     second = book(other_student, office, slot)
 
     assert {first.employee, second.employee} == {employee, colleague}
+
+
+@pytest.mark.django_db
+def test_consecutive_bookings_are_spread_evenly_across_the_office(
+    office, employee, student, day
+):
+    """FR10: nobody carries two more appointments than a colleague.
+
+    Each booking is on a different slot, so nothing but the load counter
+    decides who gets it: with the previous `order_by("pk")` every one of these
+    would have landed on the same employee.
+    """
+    make_employee(office, "luca.verdi@unibo.it")
+    make_employee(office, "sofia.conti@unibo.it")
+
+    for hour in (9, 10, 11, 12, 14, 15, 16):
+        book(student, office, slot_at(day, hour))
+
+    loads = [
+        Appointment.objects.filter(
+            employee=staff, status=AppointmentStatus.BOOKED
+        ).count()
+        for staff in office.employees.all()
+    ]
+
+    assert sum(loads) == 7
+    assert max(loads) - min(loads) <= 1
 
 
 @pytest.mark.django_db

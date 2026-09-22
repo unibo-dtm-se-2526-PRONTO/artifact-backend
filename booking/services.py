@@ -130,6 +130,29 @@ def cancel_appointment(appointment):
     return appointment
 
 
+def complete_appointment(appointment):
+    """Record that a booked meeting has taken place.
+
+    Refused before the slot begins: "completed" means the employee answered
+    the student, and nobody can answer a question at a meeting that has not
+    started. It is the mirror of the rule in `cancel_appointment`, which
+    refuses to call off a meeting already under way.
+
+    Completing does not free the slot for anyone else — the constraint is
+    conditional on BOOKED, so the row stops reserving the employee, but the
+    slot is in the past by then and `available_slots` no longer offers it.
+    """
+    if appointment.status != AppointmentStatus.BOOKED:
+        raise BookingError("Only a booked appointment can be completed.")
+    if appointment.slot > timezone.now():
+        raise BookingError("This appointment has not started yet.")
+
+    appointment.status = AppointmentStatus.COMPLETED
+    # updated_at is auto_now: left out of update_fields it would not be touched.
+    appointment.save(update_fields=["status", "updated_at"])
+    return appointment
+
+
 def _free_employee(office, slot):
     """The least busy employee of `office` with nothing booked at `slot`.
 

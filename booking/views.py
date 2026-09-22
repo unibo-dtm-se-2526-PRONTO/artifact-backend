@@ -10,14 +10,19 @@ from pronto.enums import Role
 from pronto.i18n import LanguageAwareMixin
 
 from .models import Appointment, Office
-from .permissions import IsStudent
+from .permissions import IsEmployee, IsStudent
 from .serializers import (
     AppointmentCreateSerializer,
     AppointmentSerializer,
     AvailabilitySerializer,
     OfficeSerializer,
 )
-from .services import BookingError, available_slots, cancel_appointment
+from .services import (
+    BookingError,
+    available_slots,
+    cancel_appointment,
+    complete_appointment,
+)
 
 
 @api_view(["GET"])
@@ -109,6 +114,20 @@ class AppointmentCancelView(AppointmentQuerysetMixin, generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         try:
             cancel_appointment(self.get_object())
+        except BookingError as error:
+            return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AppointmentCompleteView(AppointmentQuerysetMixin, generics.GenericAPIView):
+    """Record that an appointment assigned to the caller has taken place."""
+
+    serializer_class = AppointmentSerializer
+    permission_classes = [IsAuthenticated, IsEmployee]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            complete_appointment(self.get_object())
         except BookingError as error:
             return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)

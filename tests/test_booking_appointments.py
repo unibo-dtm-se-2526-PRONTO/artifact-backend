@@ -5,6 +5,8 @@ checked here is the HTTP contract on top of them — who may call what, what
 comes back, and which errors reach the client.
 """
 
+from datetime import timedelta
+
 import pytest
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -18,6 +20,23 @@ APPOINTMENTS_URL = "/api/appointments/"
 
 def cancel_url(appointment_id):
     return f"{APPOINTMENTS_URL}{appointment_id}/cancel/"
+
+
+def complete_url(appointment_id):
+    return f"{APPOINTMENTS_URL}{appointment_id}/complete/"
+
+
+def move_to_the_past(appointment):
+    """Rewind a booked appointment so it can be completed.
+
+    Updated through a queryset rather than `save()`, so nothing recomputes
+    `updated_at` behind the test's back: only the slot moves.
+    """
+    Appointment.objects.filter(pk=appointment.pk).update(
+        slot=appointment.slot - timedelta(days=7)
+    )
+    appointment.refresh_from_db()
+    return appointment
 
 
 def booking_payload(office, slot):
@@ -238,3 +257,68 @@ def test_cancelling_frees_the_slot_for_another_student(
     )
 
     assert response.status_code == status.HTTP_201_CREATED
+
+
+# --- completing --------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_assigned_employee_can_complete_an_appointment(
+    employee_client, appointment
+):
+    move_to_the_past(appointment)
+
+    response = employee_client.post(complete_url(appointment.id))
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    appointment.refresh_from_db()
+    assert appointment.status == AppointmentStatus.COMPLETED
+
+
+@pytest.mark.django_db
+def test_a_student_cannot_complete_their_own_appointment(student_client, appointment):
+    """The student is the one asking the question, not the one answering it."""
+    move_to_the_past(appointment)
+
+    response = student_client.post(complete_url(appointment.id))
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    appointment.refresh_from_db()
+    assert appointment.status == AppointmentStatus.BOOKED
+
+
+@pytest.mark.django_db
+def test_completing_a_colleagues_appointment_is_not_found(office, appointment):
+    """404 rather than 403, as everywhere else: it is not their appointment."""
+    colleague = make_employee(office, "luca.verdi@unibo.it")
+    move_to_the_past(appointment)
+
+    response = authenticate(colleague.user).post(complete_url(appointment.id))
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    appointment.refresh_from_db()
+    assert appointment.status == AppointmentStatus.BOOKED
+
+
+@pytest.mark.django_db
+def test_completing_an_appointment_that_has_not_started_is_rejected(
+    employee_client, appointment
+):
+    response = employee_client.post(complete_url(appointment.id))
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    appointment.refresh_from_db()
+    assert appointment.status == AppointmentStatus.BOOKED
+
+
+@pytest.mark.django_db
+def test_a_completed_appointment_still_belongs_to_the_student(
+    student_client, employee_client, appointment
+):
+    """Completing is not deleting: the student keeps the record of the meeting."""
+    move_to_the_past(appointment)
+    employee_client.post(complete_url(appointment.id))
+
+    response = student_client.get(APPOINTMENTS_URL)
+
+    assert [row["status"] for row in response.json()] == [AppointmentStatus.COMPLETED]

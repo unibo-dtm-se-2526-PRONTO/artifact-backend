@@ -266,6 +266,7 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 | GET    | `/api/appointments/`                    | token   | The caller's own appointments                    |
 | POST   | `/api/appointments/`                    | student | Book a slot; the employee is assigned server-side |
 | POST   | `/api/appointments/<id>/cancel/`        | student / employee | Cancel one of the caller's appointments |
+| POST   | `/api/appointments/<id>/complete/`      | employee | Record that an appointment assigned to the caller took place |
 
 Every endpoint that returns stored text accepts `?lang=it|en` (`it` by
 default) and answers with neutral keys — `name`, `question`, `answer` — instead
@@ -297,11 +298,17 @@ The rules, all covered by `tests/test_booking_services.py`:
 - cancelling frees the slot again, which is why the uniqueness constraint on
   `(employee, slot)` only applies to appointments still in `BOOKED`
 - slots in the past, inactive offices and offices with no staff are refused
+- an appointment is completed by the employee handling it, and only once it
+  has started: "completed" means the question was answered, which cannot have
+  happened at a meeting still in the future. It is the mirror of the rule that
+  refuses to cancel a meeting already under way
 
-Students book; employees answer. A student sees only their own appointments,
-an employee only those assigned to them, an admin all of them. Asking for
-someone else's appointment returns `404`, not `403`: whether it exists is not
-the caller's business.
+Students book; employees answer, and close the appointment when they have.
+A student sees only their own appointments, an employee only those assigned to
+them, an admin all of them. Asking for someone else's appointment returns
+`404`, not `403`: whether it exists is not the caller's business. Completing
+is the one action scoping alone does not protect — a student reaches their own
+appointment legitimately — so `IsEmployee` guards it explicitly.
 
 ## FAQ
 

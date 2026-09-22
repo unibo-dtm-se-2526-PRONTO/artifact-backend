@@ -21,6 +21,7 @@ from booking.services import (
     available_slots,
     book_appointment,
     cancel_appointment,
+    complete_appointment,
 )
 from pronto.enums import AppointmentStatus
 from tests.conftest import make_employee, make_user, slot_at
@@ -340,3 +341,63 @@ def test_cancel_appointment_rejects_a_past_appointment(office, employee, student
 
     with pytest.raises(BookingError):
         cancel_appointment(appointment)
+
+
+# --- complete_appointment ----------------------------------------------------
+
+
+def past_appointment(student, office, employee, day, status=AppointmentStatus.BOOKED):
+    """A meeting that already happened, built straight through the ORM.
+
+    The service refuses to book a slot in the past, which is the whole point
+    of these tests: the only way to have an appointment worth completing is
+    to let time pass, or to write the row directly.
+    """
+    return Appointment.objects.create(
+        student=student,
+        office=office,
+        employee=employee,
+        slot=slot_at(day - timedelta(days=7), 9),
+        status=status,
+        question_text="Domanda della settimana scorsa.",
+        question_lang="it",
+    )
+
+
+@pytest.mark.django_db
+def test_complete_appointment_marks_it_completed(office, employee, student, day):
+    appointment = past_appointment(student, office, employee, day)
+
+    complete_appointment(appointment)
+
+    appointment.refresh_from_db()
+    assert appointment.status == AppointmentStatus.COMPLETED
+
+
+@pytest.mark.django_db
+def test_complete_appointment_rejects_one_that_has_not_started(
+    office, employee, student, day
+):
+    appointment = book(student, office, slot_at(day, 9))
+
+    with pytest.raises(BookingError):
+        complete_appointment(appointment)
+
+
+@pytest.mark.django_db
+def test_complete_appointment_rejects_a_cancelled_one(office, employee, student, day):
+    appointment = past_appointment(
+        student, office, employee, day, status=AppointmentStatus.CANCELLED
+    )
+
+    with pytest.raises(BookingError):
+        complete_appointment(appointment)
+
+
+@pytest.mark.django_db
+def test_complete_appointment_is_not_repeatable(office, employee, student, day):
+    appointment = past_appointment(student, office, employee, day)
+    complete_appointment(appointment)
+
+    with pytest.raises(BookingError):
+        complete_appointment(appointment)

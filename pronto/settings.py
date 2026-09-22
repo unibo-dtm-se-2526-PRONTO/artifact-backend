@@ -87,6 +87,13 @@ EMAIL_BACKEND = os.getenv(
 )
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@pronto.local")
 
+# Booking timetable. The helpdesk keeps the same hours at every office; only
+# the length of a slot varies, and that is stored on the Office itself.
+# Monday to Friday, as weekday() numbers them.
+BOOKING_WORKING_DAYS = (0, 1, 2, 3, 4)
+BOOKING_OPENING_HOUR = 9
+BOOKING_CLOSING_HOUR = 17
+
 # Where the verification link sent by email points to.
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
 

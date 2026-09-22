@@ -246,14 +246,6 @@ the booking grid builds its slots in the active timezone, so opening hours of
 9-17 mean the office's nine to five. Under UTC the same setting would offer
 students 11:00-19:00 local time.
 
-## Release
-
-Pushing to `master` runs `semantic-release`, which reads the Conventional
-Commit messages, computes the next version, updates `CHANGELOG.md` and
-`pyproject.toml`, and creates the tag and the GitHub release. Nothing is
-published to PyPI: PRONTO is a deployed backend, not a library, and
-`package-mode = false` means Poetry would refuse to build a package anyway.
-
 ## Endpoints
 
 All endpoints require a token (`Authorization: Token <key>`) except where the

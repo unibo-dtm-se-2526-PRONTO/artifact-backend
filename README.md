@@ -230,6 +230,30 @@ always a weekday in the future. Fixtures stay local to a file while one file
 owns them, as the accounts tests do; they move to `conftest.py` once a second
 file needs the same cast.
 
+## Configuration
+
+`.env` is not versioned; `.env.example` lists every key. Three of them decide
+how the app behaves outside tests:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `SECRET_KEY` | — | Required. Missing outside tests, Django refuses to start |
+| `DEBUG` | `False` | Accepts `1`, `true`, `yes`, `on`. Off unless asked for, so a deployment that forgets it does not serve tracebacks |
+| `ALLOWED_HOSTS` | empty | Comma-separated. Required once `DEBUG` is off; in debug it defaults to localhost |
+
+`TIME_ZONE` is `Europe/Rome`, and this is load-bearing rather than cosmetic:
+the booking grid builds its slots in the active timezone, so opening hours of
+9-17 mean the office's nine to five. Under UTC the same setting would offer
+students 11:00-19:00 local time.
+
+## Release
+
+Pushing to `master` runs `semantic-release`, which reads the Conventional
+Commit messages, computes the next version, updates `CHANGELOG.md` and
+`pyproject.toml`, and creates the tag and the GitHub release. Nothing is
+published to PyPI: PRONTO is a deployed backend, not a library, and
+`package-mode = false` means Poetry would refuse to build a package anyway.
+
 ## Endpoints
 
 All endpoints require a token (`Authorization: Token <key>`) except where the
@@ -268,10 +292,16 @@ The rules, all covered by `tests/test_booking_services.py`:
 
 - a slot lasts `office.slot_duration_minutes` and must sit exactly on that grid
 - the timetable is Monday to Friday, `BOOKING_OPENING_HOUR` to
-  `BOOKING_CLOSING_HOUR` in `pronto/settings.py`. It is a setting rather than a
-  model because the helpdesk keeps the same hours everywhere; if offices ever
-  need their own calendars, that is the seam to replace
+  `BOOKING_CLOSING_HOUR` in `pronto/settings.py`, read in `TIME_ZONE`
+  (`Europe/Rome`) — those hours are the office's local ones, not the server's.
+  It is a setting rather than a model because the helpdesk keeps the same hours
+  everywhere; if offices ever need their own calendars, that is the seam to
+  replace
 - a slot stays bookable while at least one employee of the office is free
+- among the employees free in a slot, the booking goes to whoever holds the
+  fewest appointments still `BOOKED`, ties broken by primary key. The balance
+  is best-effort under simultaneous requests: the counts are read before the
+  insert, so what is guaranteed is only that nobody is double-booked
 - cancelling frees the slot again, which is why the uniqueness constraint on
   `(employee, slot)` only applies to appointments still in `BOOKED`
 - slots in the past, inactive offices and offices with no staff are refused

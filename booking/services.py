@@ -16,7 +16,7 @@ from datetime import datetime, time, timedelta
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from pronto.enums import AppointmentStatus
@@ -131,12 +131,30 @@ def cancel_appointment(appointment):
 
 
 def _free_employee(office, slot):
-    """An employee of `office` with nothing booked at `slot`, or None.
+    """The least busy employee of `office` with nothing booked at `slot`.
 
-    Ordered by primary key rather than at random: a deterministic choice keeps
-    the tests honest, and spreading the load is not this app's problem yet.
+    Load is counted over every appointment still BOOKED, not just this day's:
+    what the helpdesk shares out is the work waiting to be done, and an
+    appointment cancelled or completed is no longer work.
+
+    Ties break on primary key, so the choice stays deterministic — the tests
+    can name who gets a booking, and two identical situations never resolve
+    differently. Under simultaneous requests the balance is best-effort, as
+    the counts are read before the insert; what is guaranteed is only that
+    nobody is double-booked, which is the database's job (see `Meta.constraints`
+    on `Appointment`).
     """
     busy = Appointment.objects.filter(
         slot=slot, status=AppointmentStatus.BOOKED, employee__office=office
     ).values_list("employee_id", flat=True)
-    return office.employees.exclude(pk__in=busy).order_by("pk").first()
+    return (
+        office.employees.exclude(pk__in=busy)
+        .annotate(
+            load=Count(
+                "appointments",
+                filter=Q(appointments__status=AppointmentStatus.BOOKED),
+            )
+        )
+        .order_by("load", "pk")
+        .first()
+    )

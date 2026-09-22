@@ -1,0 +1,17 @@
+from rest_framework.permissions import BasePermission
+
+from pronto.enums import Role
+
+
+class IsStudent(BasePermission):
+    """Only students book appointments; employees are the ones who answer them.
+
+    Read through ``getattr`` rather than ``request.user.role``: an anonymous
+    user has no role, and this has to deny rather than raise if it is ever used
+    without ``IsAuthenticated`` in front of it.
+    """
+
+    message = "Only students can book an appointment."
+
+    def has_permission(self, request, view):
+        return getattr(request.user, "role", None) == Role.STUDENT

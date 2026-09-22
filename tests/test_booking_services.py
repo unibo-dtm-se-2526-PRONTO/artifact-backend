@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from django.contrib.auth import get_user_model
 
+from booking import services
 from booking.models import Appointment
 from booking.services import (
     BookingError,
@@ -202,6 +203,46 @@ def test_consecutive_bookings_are_spread_evenly_across_the_office(
 
     assert sum(loads) == 7
     assert max(loads) - min(loads) <= 1
+
+
+@pytest.mark.django_db
+def test_book_appointment_reports_a_slot_lost_in_the_race(
+    office, employee, student, day, monkeypatch
+):
+    """FR9/NFR1: the loser of a race is told to pick again, not given a 500.
+
+    `book_appointment` reads who is free and then inserts, and nothing stops
+    another request from slipping between the two. Rather than hope two real
+    threads interleave that way — which would make the suite flaky and prove
+    nothing on the runs where they do not — the rival booking is inserted from
+    inside `_free_employee`, which is exactly that window.
+    """
+    rival = make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT)
+    slot = slot_at(day, 10)
+    choose = services._free_employee
+
+    def choose_then_lose_the_slot(office_, slot_):
+        chosen = choose(office_, slot_)
+        Appointment.objects.create(
+            student=rival,
+            office=office_,
+            employee=chosen,
+            slot=slot_,
+            question_text="Sono arrivata un istante prima.",
+            question_lang="it",
+        )
+        return chosen
+
+    monkeypatch.setattr(services, "_free_employee", choose_then_lose_the_slot)
+
+    with pytest.raises(BookingError):
+        book(student, office, slot)
+
+    # One booking, not two — and the query itself is the second assertion: the
+    # atomic block rolled back to its savepoint, so the connection is still
+    # usable after the IntegrityError instead of demanding a rollback first.
+    assert Appointment.objects.filter(slot=slot).count() == 1
+    assert Appointment.objects.filter(student=student).count() == 0
 
 
 @pytest.mark.django_db

@@ -1,9 +1,12 @@
-"""Tests for the booking models: offices, employee profiles and appointments."""
+"""Tests for the booking models: offices, employee profiles and appointments.
+
+`office`, `student` and `employee` come from `tests/conftest.py`. The
+constraint on (employee, slot) is tested in `tests/test_booking_constraints.py`.
+"""
 
 from datetime import timedelta
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db.models import ProtectedError
@@ -11,41 +14,7 @@ from django.utils import timezone
 
 from booking.models import Appointment, EmployeeProfile, Office
 from pronto.enums import AppointmentStatus, OfficeCode
-
-User = get_user_model()
-
-PASSWORD = "s3cret-passphrase"
-
-
-@pytest.fixture
-def office(db):
-    return Office.objects.create(
-        code=OfficeCode.GUIDANCE,
-        name_it="Orientamento",
-        name_en="Guidance",
-        contact_email="orientamento@unibo.it",
-    )
-
-
-@pytest.fixture
-def student(db):
-    return User.objects.create_user(
-        email="mario.rossi@studio.unibo.it",
-        password=PASSWORD,
-        role=User.Role.STUDENT,
-        is_active=True,
-    )
-
-
-@pytest.fixture
-def employee(db, office):
-    user = User.objects.create_user(
-        email="anna.bianchi@unibo.it",
-        password=PASSWORD,
-        role=User.Role.EMPLOYEE,
-        is_active=True,
-    )
-    return EmployeeProfile.objects.create(user=user, office=office)
+from tests.conftest import make_employee
 
 
 @pytest.fixture
@@ -74,7 +43,16 @@ def test_office_codes_come_from_the_shared_enum():
 
 
 @pytest.mark.django_db
-def test_a_new_office_is_active_and_books_half_hour_slots(office):
+def test_a_new_office_is_active_and_books_half_hour_slots():
+    # Created here rather than taken from conftest: the shared fixture sets
+    # slot_duration_minutes explicitly, which would hide the default.
+    office = Office.objects.create(
+        code=OfficeCode.GUIDANCE,
+        name_it="Orientamento",
+        name_en="Guidance",
+        contact_email="orientamento@unibo.it",
+    )
+
     assert office.is_active
     assert office.slot_duration_minutes == 30
 
@@ -184,38 +162,8 @@ def test_appointments_are_listed_with_the_most_recent_slot_first(
 
 
 @pytest.mark.django_db
-def test_an_employee_cannot_be_booked_twice_in_the_same_slot(student, employee, slot):
-    book(student, employee, slot)
-
-    with pytest.raises(IntegrityError):
-        book(student, employee, slot)
-
-
-@pytest.mark.django_db
-def test_cancelling_an_appointment_frees_the_slot(student, employee, slot):
-    # The unique constraint is conditional on BOOKED precisely so that the
-    # cancelled row stays on record without blocking the slot.
-    first = book(student, employee, slot)
-    first.status = AppointmentStatus.CANCELLED
-    first.save()
-
-    second = book(student, employee, slot)
-
-    assert second.status == AppointmentStatus.BOOKED
-    assert Appointment.objects.count() == 2
-
-
-@pytest.mark.django_db
 def test_two_employees_can_be_booked_in_the_same_slot(student, employee, slot):
-    colleague = EmployeeProfile.objects.create(
-        user=User.objects.create_user(
-            email="luca.verdi@unibo.it",
-            password=PASSWORD,
-            role=User.Role.EMPLOYEE,
-            is_active=True,
-        ),
-        office=employee.office,
-    )
+    colleague = make_employee(employee.office, email="luca.verdi@unibo.it")
     book(student, employee, slot)
 
     book(student, colleague, slot)

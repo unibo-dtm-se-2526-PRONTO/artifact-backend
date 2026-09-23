@@ -1,9 +1,10 @@
 """Fixtures shared by the booking tests.
 
 The accounts tests keep their fixtures local, which works while one file owns
-them. The booking slice is tested from three angles — services, offices and
-appointments — and all three need the same cast: an office, someone staffing
-it, a student, and a day in the future that is not a weekend.
+them. The booking slice is tested from several angles — models, constraints,
+services, offices and appointments — and all of them need the same cast: an
+office, someone staffing it, a student, and a day in the future that is not a
+weekend.
 
 Fixture names are deliberately specific (`office`, `student`, `employee`)
 rather than generic, so nothing here shadows what another test file defines

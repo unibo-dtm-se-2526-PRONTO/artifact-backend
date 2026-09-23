@@ -22,16 +22,39 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
-# Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+
+
+def env_flag(name, default=False):
+    """Read a boolean from the environment, where everything is a string.
+
+    Written out rather than `os.getenv(name) == "True"` because DEBUG=true and
+    DEBUG=1 are what people actually write in a .env file, and silently reading
+    either as False would turn debugging off without saying so.
+    """
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Off unless asked for: a deployment that forgets to set DEBUG gets the safe
+# answer, instead of serving tracebacks and settings to whoever triggers a 500.
+DEBUG = env_flag("DEBUG")
 
-ALLOWED_HOSTS: list[str] = []
+# Comma-separated, e.g. ALLOWED_HOSTS=pronto.unibo.it,localhost
+ALLOWED_HOSTS: list[str] = [
+    host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",") if host.strip()
+]
+
+# Django refuses every request when ALLOWED_HOSTS is empty and DEBUG is off, so
+# a local run with neither variable set would answer 400 to everything. In
+# debug the default is the developer's own machine, and nothing more.
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
 
 
 # Application definition
@@ -86,6 +109,13 @@ EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@pronto.local")
+
+# Booking timetable. The helpdesk keeps the same hours at every office; only
+# the length of a slot varies, and that is stored on the Office itself.
+# Monday to Friday, as weekday() numbers them.
+BOOKING_WORKING_DAYS = (0, 1, 2, 3, 4)
+BOOKING_OPENING_HOUR = 9
+BOOKING_CLOSING_HOUR = 17
 
 # Where the verification link sent by email points to.
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
@@ -160,7 +190,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+# The helpdesk is in Cesena and its timetable is written in local time: the
+# opening hours below are 9-17 for the office, not 9-17 UTC. Every aware
+# datetime the booking grid builds goes through the active timezone, so this
+# is what makes a slot mean what the staff and the students think it means.
+TIME_ZONE = "Europe/Rome"
 
 USE_I18N = True
 

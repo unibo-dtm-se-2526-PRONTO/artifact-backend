@@ -216,12 +216,35 @@ The cycle: write a failing test → minimal code to make it pass → refactor.
 
 ## Test layout
 
-All tests live in `tests/`, not in `booking/tests.py`. CI points at `tests/`.
+All tests live in `tests/`, never in an app's own `tests.py`. CI points at
+`tests/`, so a test file anywhere else simply never runs.
 
 Two reference examples to copy from:
 - `tests/test_health.py` — endpoint test using DRF's `APIClient`
 - `tests/test_database.py` — database test using the `@pytest.mark.django_db`
   marker, which gives each test a clean, isolated database
+
+`tests/conftest.py` holds the fixtures the three booking test files share — an
+office, its staff, a student, their authenticated clients, and a `day` that is
+always a weekday in the future. Fixtures stay local to a file while one file
+owns them, as the accounts tests do; they move to `conftest.py` once a second
+file needs the same cast.
+
+## Configuration
+
+`.env` is not versioned; `.env.example` lists every key. Three of them decide
+how the app behaves outside tests:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `SECRET_KEY` | — | Required. Missing outside tests, Django refuses to start |
+| `DEBUG` | `False` | Accepts `1`, `true`, `yes`, `on`. Off unless asked for, so a deployment that forgets it does not serve tracebacks |
+| `ALLOWED_HOSTS` | empty | Comma-separated. Required once `DEBUG` is off; in debug it defaults to localhost |
+
+`TIME_ZONE` is `Europe/Rome`, and this is load-bearing rather than cosmetic:
+the booking grid builds its slots in the active timezone, so opening hours of
+9-17 mean the office's nine to five. Under UTC the same setting would offer
+students 11:00-19:00 local time.
 
 ## Endpoints
 
@@ -229,13 +252,74 @@ All endpoints require a token (`Authorization: Token <key>`) except where the
 Auth column says "public". The project-wide defaults are `TokenAuthentication`
 and `IsAuthenticated`, set in `pronto/settings.py`.
 
-| Method | Path                   | Auth   | Description                                      |
-|--------|------------------------|--------|--------------------------------------------------|
-| GET    | `/api/health/`         | public | Health check, returns `{"status": "ok"}`         |
-| POST   | `/api/auth/register/`  | public | Create an account; `role` is derived from the email domain |
-| POST   | `/api/auth/login/`     | public | Exchange email and password for a token          |
-| POST   | `/api/auth/logout/`    | token  | Delete the caller's token                        |
-| GET    | `/api/auth/me/`        | token  | The authenticated user's own data                |
+| Method | Path                                    | Auth    | Description                                      |
+|--------|-----------------------------------------|---------|--------------------------------------------------|
+| GET    | `/api/health/`                          | public  | Health check, returns `{"status": "ok"}`         |
+| POST   | `/api/auth/register/`                   | public  | Create an account; `role` is derived from the email domain |
+| POST   | `/api/auth/login/`                      | public  | Exchange email and password for a token          |
+| POST   | `/api/auth/logout/`                     | token   | Delete the caller's token                        |
+| GET    | `/api/auth/me/`                         | token   | The authenticated user's own data                |
+| GET    | `/api/faqs/`                            | public  | Published FAQs; filter with `?office=<code>`     |
+| GET    | `/api/faqs/<id>/`                       | public  | A single published FAQ                           |
+| GET    | `/api/offices/`                         | token   | The offices currently taking bookings            |
+| GET    | `/api/offices/<code>/availability/`     | token   | Free slots on `?date=YYYY-MM-DD` (required)      |
+| GET    | `/api/appointments/`                    | token   | The caller's own appointments                    |
+| POST   | `/api/appointments/`                    | student | Book a slot; the employee is assigned server-side |
+| POST   | `/api/appointments/<id>/cancel/`        | student / employee | Cancel one of the caller's appointments |
+| POST   | `/api/appointments/<id>/complete/`      | employee | Record that an appointment assigned to the caller took place |
+
+Every endpoint that returns stored text accepts `?lang=it|en` (`it` by
+default) and answers with neutral keys — `name`, `question`, `answer` — instead
+of exposing the `_it` / `_en` columns. An unsupported code is a `400`.
+
+## Booking
+
+Appointments are never created directly from a view. Every booking goes through
+`booking/services.py`, which is where the one invariant the schema cannot
+express is upheld: an appointment's employee must work for the appointment's
+office (see the docstring of `Appointment`). The service picks the employee
+from `office.employees`, so the client neither chooses nor sees a way to
+choose one.
+
+The rules, all covered by `tests/test_booking_services.py`:
+
+- a slot lasts `office.slot_duration_minutes` and must sit exactly on that grid
+- the timetable is Monday to Friday, `BOOKING_OPENING_HOUR` to
+  `BOOKING_CLOSING_HOUR` in `pronto/settings.py`, read in `TIME_ZONE`
+  (`Europe/Rome`) — those hours are the office's local ones, not the server's.
+  It is a setting rather than a model because the helpdesk keeps the same hours
+  everywhere; if offices ever need their own calendars, that is the seam to
+  replace
+- a slot stays bookable while at least one employee of the office is free
+- among the employees free in a slot, the booking goes to whoever holds the
+  fewest appointments still `BOOKED`, ties broken by primary key. The balance
+  is best-effort under simultaneous requests: the counts are read before the
+  insert, so what is guaranteed is only that nobody is double-booked
+- cancelling frees the slot again, which is why the uniqueness constraint on
+  `(employee, slot)` only applies to appointments still in `BOOKED`
+- slots in the past, inactive offices and offices with no staff are refused
+- an appointment is completed by the employee handling it, and only once it
+  has started: "completed" means the question was answered, which cannot have
+  happened at a meeting still in the future. It is the mirror of the rule that
+  refuses to cancel a meeting already under way
+
+Students book; employees answer, and close the appointment when they have.
+A student sees only their own appointments, an employee only those assigned to
+them, an admin all of them. Asking for someone else's appointment returns
+`404`, not `403`: whether it exists is not the caller's business. Completing
+is the one action scoping alone does not protect — a student reaches their own
+appointment legitimately — so `IsEmployee` guards it explicitly.
+
+## FAQ
+
+The FAQ endpoints are public, unlike the rest of the API. They exist to spare a
+phone call, so requiring an account first would defeat their purpose. Writing
+is not exposed over HTTP at all — FAQs are maintained in the Django admin.
+
+`faq.Faq` stores `office_code` as a plain choices field rather than a foreign
+key to `booking.Office`: the two slices share the `OfficeCode` enum in
+`pronto/enums.py` and nothing else, so neither has to migrate or deploy with
+the other.
 
 ## Accounts
 

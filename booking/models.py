@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 
 from pronto.enums import AppointmentStatus, OfficeCode
 
@@ -70,6 +70,61 @@ class EmployeeProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} ({self.office.code})"
+
+
+class Weekday(models.IntegerChoices):
+    """Days of the week, numbered as ``date.weekday()`` numbers them."""
+
+    MONDAY = 0, "lunedì"
+    TUESDAY = 1, "martedì"
+    WEDNESDAY = 2, "mercoledì"
+    THURSDAY = 3, "giovedì"
+    FRIDAY = 4, "venerdì"
+    SATURDAY = 5, "sabato"
+    SUNDAY = 6, "domenica"
+
+
+class Shift(models.Model):
+    """A stretch of a weekday an employee is on duty, every week.
+
+    Shifts are what an office's availability is computed from (FR4): the slots
+    are never stored. The times are the helpdesk's local ones (``TIME_ZONE``).
+
+    Two rules live in the service rather than here, because they depend on
+    other rows: a shift sits on its office's slot grid, and it overlaps no
+    other shift of the same employee (see `booking.services.declare_shift`).
+    As with `Appointment`, anything writing shifts outside that service has to
+    uphold them itself.
+    """
+
+    employee = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.CASCADE,
+        related_name="shifts",
+        verbose_name="dipendente",
+    )
+    weekday = models.PositiveSmallIntegerField(
+        choices=Weekday.choices, verbose_name="giorno della settimana"
+    )
+    start_time = models.TimeField(verbose_name="inizio")
+    end_time = models.TimeField(verbose_name="fine")
+
+    class Meta:
+        verbose_name = "turno"
+        verbose_name_plural = "turni"
+        ordering = ["weekday", "start_time"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(start_time__lt=F("end_time")),
+                name="shift_ends_after_it_starts",
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.employee.user.email}: {self.get_weekday_display()} "
+            f"{self.start_time:%H:%M}-{self.end_time:%H:%M}"
+        )
 
 
 class Appointment(models.Model):

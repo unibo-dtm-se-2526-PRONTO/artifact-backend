@@ -178,6 +178,18 @@ class Appointment(models.Model):
         choices=[("it", "Italiano"), ("en", "Inglese")],
         verbose_name="lingua della domanda",
     )
+    # The FAQ the student was shown and did not find helpful, so the employee
+    # starts from what the student already knows. Optional: there may have been
+    # no match at all. The dependency runs one way only — `faq` knows nothing
+    # of appointments, hence no reverse accessor.
+    suggested_faq = models.ForeignKey(
+        "faq.Faq",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="FAQ proposta",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="creato il")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="aggiornato il")
 

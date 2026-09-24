@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from faq.models import Faq
 from pronto.i18n import TranslatedField
 
 from .models import Appointment, EmployeeProfile, Office, Shift
@@ -41,6 +42,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
     office = serializers.SlugRelatedField(slug_field="code", read_only=True)
     student = serializers.EmailField(source="student.email", read_only=True)
     employee = serializers.EmailField(source="employee.user.email", read_only=True)
+    faq_id = serializers.IntegerField(
+        source="suggested_faq_id", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Appointment
@@ -53,6 +57,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "status",
             "question_text",
             "question_lang",
+            "faq_id",
             "created_at",
         ]
         read_only_fields = fields
@@ -71,10 +76,17 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
     office = serializers.SlugRelatedField(
         slug_field="code", queryset=Office.objects.filter(is_active=True)
     )
+    # Only a published FAQ can be one the student was shown.
+    faq_id = serializers.PrimaryKeyRelatedField(
+        source="suggested_faq",
+        queryset=Faq.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Appointment
-        fields = ["office", "slot", "question_text", "question_lang"]
+        fields = ["office", "slot", "question_text", "question_lang", "faq_id"]
 
     def create(self, validated_data):
         try:

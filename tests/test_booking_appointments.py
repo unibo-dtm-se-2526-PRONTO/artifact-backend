@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from booking.models import Appointment
+from faq.models import Faq
 from pronto.enums import AppointmentStatus, OfficeCode, Role
 from tests.conftest import authenticate, make_employee, make_user, slot_at
 
@@ -322,3 +323,105 @@ def test_a_completed_appointment_still_belongs_to_the_student(
     response = student_client.get(APPOINTMENTS_URL)
 
     assert [row["status"] for row in response.json()] == [AppointmentStatus.COMPLETED]
+
+
+# --- the FAQ that did not help -----------------------------------------------
+
+
+@pytest.fixture
+def faq(db):
+    return Faq.objects.create(
+        office_code=OfficeCode.GUIDANCE,
+        question_it="Come si modifica il piano di studi?",
+        question_en="How do I change my study plan?",
+        answer_it="Da Studenti Online, entro ottobre.",
+        answer_en="On Studenti Online, by October.",
+    )
+
+
+@pytest.mark.django_db
+def test_a_booking_can_name_the_faq_the_student_was_shown(
+    student_client, office, employee, day, faq
+):
+    payload = booking_payload(office, slot_at(day, 9)) | {"faq_id": faq.id}
+
+    response = student_client.post(APPOINTMENTS_URL, payload, format="json")
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["faq_id"] == faq.id
+    assert Appointment.objects.get().suggested_faq == faq
+
+
+@pytest.mark.django_db
+def test_the_faq_is_optional(student_client, office, employee, day):
+    response = student_client.post(
+        APPOINTMENTS_URL, booking_payload(office, slot_at(day, 9)), format="json"
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["faq_id"] is None
+
+
+@pytest.mark.django_db
+def test_an_unknown_faq_is_a_field_error(student_client, office, employee, day):
+    payload = booking_payload(office, slot_at(day, 9)) | {"faq_id": 999}
+
+    response = student_client.post(APPOINTMENTS_URL, payload, format="json")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "faq_id" in response.json()
+    assert not Appointment.objects.exists()
+
+
+@pytest.mark.django_db
+def test_an_unpublished_faq_is_a_field_error(
+    student_client, office, employee, day, faq
+):
+    """A FAQ the student could not have been shown cannot be the one that
+    failed them."""
+    faq.is_active = False
+    faq.save()
+    payload = booking_payload(office, slot_at(day, 9)) | {"faq_id": faq.id}
+
+    response = student_client.post(APPOINTMENTS_URL, payload, format="json")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "faq_id" in response.json()
+
+
+# --- notifications through the API ------------------------------------------
+
+
+@pytest.mark.django_db
+def test_booking_through_the_api_notifies_both_sides(
+    student_client,
+    office,
+    employee,
+    student,
+    day,
+    mailoutbox,
+    django_capture_on_commit_callbacks,
+):
+    with django_capture_on_commit_callbacks(execute=True):
+        student_client.post(
+            APPOINTMENTS_URL, booking_payload(office, slot_at(day, 9)), format="json"
+        )
+
+    assert sorted(message.to[0] for message in mailoutbox) == sorted(
+        [student.email, employee.user.email]
+    )
+
+
+@pytest.mark.django_db
+def test_the_api_tells_the_service_who_cancelled(
+    employee_client,
+    appointment,
+    student,
+    mailoutbox,
+    django_capture_on_commit_callbacks,
+):
+    """The view passes the caller on, so the e-mail goes to the other side."""
+    with django_capture_on_commit_callbacks(execute=True):
+        employee_client.post(cancel_url(appointment.id))
+
+    assert [message.to for message in mailoutbox] == [[student.email]]

@@ -1,0 +1,12 @@
+{% autoescape off %}Pronto: your appointment with {{ office }} has been cancelled
+
+Your appointment has been cancelled by the office.
+
+Office: {{ office }}
+When: {{ when }}
+
+Your question:
+{{ appointment.question_text }}
+
+You can book another time in Pronto.
+{% endautoescape %}

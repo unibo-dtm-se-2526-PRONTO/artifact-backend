@@ -109,6 +109,16 @@ EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@pronto.local")
+# SMTP, read only when EMAIL_BACKEND is set to
+# django.core.mail.backends.smtp.EmailBackend. Booking e-mails are sent after
+# the booking commits, so a slow server delays the response but never a
+# database transaction; the timeout keeps that delay bounded.
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_flag("EMAIL_USE_TLS", default=True)
+EMAIL_TIMEOUT = 10
 
 # Where the verification link sent by email points to.
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")

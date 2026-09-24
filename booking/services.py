@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from pronto.enums import AppointmentStatus
 
+from . import notifications
 from .models import Appointment, EmployeeProfile, Shift
 
 MINUTES_IN_A_DAY = 24 * 60
@@ -123,8 +124,14 @@ def available_slots(office, day):
     )
 
 
-def book_appointment(*, student, office, slot, question_text, question_lang):
+def book_appointment(
+    *, student, office, slot, question_text, question_lang, suggested_faq=None
+):
     """Book `slot` at `office` for `student`, assigning a free employee.
+
+    `suggested_faq` is the FAQ the student was shown and did not find helpful,
+    if any; it is passed on to the employee. Both are e-mailed once the
+    booking commits.
 
     Raises `BookingError`, never returns a half-booked appointment.
     """
@@ -148,14 +155,19 @@ def book_appointment(*, student, office, slot, question_text, question_lang):
             # Atomic so the IntegrityError below leaves no broken transaction
             # behind for the next attempt, or for the caller's own queries.
             with transaction.atomic():
-                return Appointment.objects.create(
+                appointment = Appointment.objects.create(
                     student=student,
                     office=office,
                     employee=employee,
                     slot=slot,
                     question_text=question_text,
                     question_lang=question_lang,
+                    suggested_faq=suggested_faq,
                 )
+                # Inside the savepoint: a lost race rolls the e-mails back
+                # with the row, so nobody hears about a booking that failed.
+                notifications.appointment_booked(appointment)
+                return appointment
         except IntegrityError:
             # Another request booked the same employee between the query in
             # `_free_employee` and this insert. The partial unique index
@@ -224,8 +236,12 @@ def withdraw_shift(shift):
         shift.delete()
 
 
-def cancel_appointment(appointment):
-    """Cancel a booked appointment, freeing its slot for someone else."""
+def cancel_appointment(appointment, *, by):
+    """Cancel a booked appointment, freeing its slot for someone else.
+
+    `by` is the user cancelling: whoever else is involved is e-mailed once the
+    cancellation commits (FR15).
+    """
     if appointment.status != AppointmentStatus.BOOKED:
         raise BookingError("Only a booked appointment can be cancelled.")
     if appointment.slot <= timezone.now():
@@ -233,9 +249,11 @@ def cancel_appointment(appointment):
             "An appointment that has already started cannot be cancelled."
         )
 
-    appointment.status = AppointmentStatus.CANCELLED
-    # updated_at is auto_now: left out of update_fields it would not be touched.
-    appointment.save(update_fields=["status", "updated_at"])
+    with transaction.atomic():
+        appointment.status = AppointmentStatus.CANCELLED
+        # updated_at is auto_now: left out of update_fields it would not be touched.
+        appointment.save(update_fields=["status", "updated_at"])
+        notifications.appointment_cancelled(appointment, by=by)
     return appointment
 
 

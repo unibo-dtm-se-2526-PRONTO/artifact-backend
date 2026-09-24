@@ -25,4 +25,11 @@ urlpatterns = [
         views.AppointmentCompleteView.as_view(),
         name="appointment-complete",
     ),
+    path(
+        "employee-profile/",
+        views.EmployeeProfileView.as_view(),
+        name="employee-profile",
+    ),
+    path("shifts/", views.ShiftListCreateView.as_view(), name="shift-list"),
+    path("shifts/<int:pk>/", views.ShiftDetailView.as_view(), name="shift-detail"),
 ]

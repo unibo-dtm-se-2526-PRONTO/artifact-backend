@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from pronto.i18n import TranslatedField
 
-from .models import Appointment, Office
+from .models import Appointment, EmployeeProfile, Office, Shift
 from .services import BookingError, book_appointment
 
 
@@ -85,3 +85,33 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
             # A refused booking is a problem with the slot that was asked for,
             # so it is reported on that field and not as a bare detail string.
             raise serializers.ValidationError({"slot": str(error)}) from error
+
+
+class EmployeeProfileSerializer(serializers.ModelSerializer):
+    """The office an employee works for, named by its code.
+
+    Only active offices can be chosen, so a closed or unknown one is a field
+    error, as it is when a student books.
+    """
+
+    office = serializers.SlugRelatedField(
+        slug_field="code", queryset=Office.objects.filter(is_active=True)
+    )
+
+    class Meta:
+        model = EmployeeProfile
+        fields = ["office"]
+
+
+class ShiftSerializer(serializers.ModelSerializer):
+    """A weekly shift, read back and declared in the same shape.
+
+    It only checks the fields one by one; whether the shift fits the grid and
+    the rest of the employee's week is `declare_shift`'s call, which the view
+    makes.
+    """
+
+    class Meta:
+        model = Shift
+        fields = ["id", "weekday", "start_time", "end_time"]
+        read_only_fields = ["id"]

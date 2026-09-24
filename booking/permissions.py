@@ -18,15 +18,16 @@ class IsStudent(BasePermission):
 
 
 class IsEmployee(BasePermission):
-    """Only the staff close an appointment: they are the ones who were there.
+    """Only the staff close appointments and set up their own availability.
 
-    Load-bearing rather than decorative. `AppointmentQuerysetMixin` scopes an
-    appointment to the caller, so a student reaches their own appointment
-    perfectly well; without this check they could declare their own question
-    answered. Read through ``getattr`` for the same reason as `IsStudent`.
+    Load-bearing rather than decorative on completion. `AppointmentQuerysetMixin`
+    scopes an appointment to the caller, so a student reaches their own
+    appointment perfectly well; without this check they could declare their own
+    question answered. Read through ``getattr`` for the same reason as
+    `IsStudent`.
     """
 
-    message = "Only the employee handling an appointment can complete it."
+    message = "Only employees can do this."
 
     def has_permission(self, request, view):
         return getattr(request.user, "role", None) == Role.EMPLOYEE

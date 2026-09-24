@@ -224,9 +224,10 @@ Two reference examples to copy from:
 - `tests/test_database.py` — database test using the `@pytest.mark.django_db`
   marker, which gives each test a clean, isolated database
 
-`tests/conftest.py` holds the fixtures the three booking test files share — an
-office, its staff, a student, their authenticated clients, and a `day` that is
-always a weekday in the future. Fixtures stay local to a file while one file
+`tests/conftest.py` holds the fixtures the booking test files share — two
+offices, their staff, a student, their authenticated clients, and a `day` that
+is always a Monday in the future. Every employee it makes works Monday to
+Friday, 9 to 17, unless a test passes other `shifts` to `make_employee`. Fixtures stay local to a file while one file
 owns them, as the accounts tests do; they move to `conftest.py` once a second
 file needs the same cast.
 
@@ -242,8 +243,8 @@ how the app behaves outside tests:
 | `ALLOWED_HOSTS` | empty | Comma-separated. Required once `DEBUG` is off; in debug it defaults to localhost |
 
 `TIME_ZONE` is `Europe/Rome`, and this is load-bearing rather than cosmetic:
-the booking grid builds its slots in the active timezone, so opening hours of
-9-17 mean the office's nine to five. Under UTC the same setting would offer
+the booking grid builds its slots in the active timezone, so a shift declared
+9-17 means the office's nine to five. Under UTC the same shift would offer
 students 11:00-19:00 local time.
 
 ## Endpoints
@@ -267,6 +268,11 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 | POST   | `/api/appointments/`                    | student | Book a slot; the employee is assigned server-side |
 | POST   | `/api/appointments/<id>/cancel/`        | student / employee | Cancel one of the caller's appointments |
 | POST   | `/api/appointments/<id>/complete/`      | employee | Record that an appointment assigned to the caller took place |
+| GET    | `/api/employee-profile/`                | employee | The caller's office; `404` until one is chosen   |
+| POST   | `/api/employee-profile/`                | employee | Choose the caller's office, once: `{"office": "<code>"}` |
+| GET    | `/api/shifts/`                          | employee | The caller's weekly shifts                       |
+| POST   | `/api/shifts/`                          | employee | Declare a shift: `{"weekday": 0-6, "start_time": "HH:MM", "end_time": "HH:MM"}`, `0` is Monday |
+| DELETE | `/api/shifts/<id>/`                     | employee | Withdraw a shift; `400` listing the `appointments` it still covers |
 
 Every endpoint that returns stored text accepts `?lang=it|en` (`it` by
 default) and answers with neutral keys — `name`, `question`, `answer` — instead
@@ -283,21 +289,23 @@ choose one.
 
 The rules, all covered by `tests/test_booking_services.py`:
 
-- a slot lasts `office.slot_duration_minutes` and must sit exactly on that grid
-- the timetable is Monday to Friday, `BOOKING_OPENING_HOUR` to
-  `BOOKING_CLOSING_HOUR` in `pronto/settings.py`, read in `TIME_ZONE`
-  (`Europe/Rome`) — those hours are the office's local ones, not the server's.
-  It is a setting rather than a model because the helpdesk keeps the same hours
-  everywhere; if offices ever need their own calendars, that is the seam to
-  replace
-- a slot stays bookable while at least one employee of the office is free
-- among the employees free in a slot, the booking goes to whoever holds the
-  fewest appointments still `BOOKED`, ties broken by primary key. The balance
-  is best-effort under simultaneous requests: the counts are read before the
-  insert, so what is guaranteed is only that nobody is double-booked
+- a slot lasts `office.slot_duration_minutes`; an office's day is a grid that
+  starts at midnight and steps by that length, read in `TIME_ZONE`
+  (`Europe/Rome`) — the office's local time, not the server's
+- availability is derived from the employees' weekly shifts and never stored:
+  a slot on the grid is open when some employee has a shift covering the whole
+  of it, and stays bookable while one of those employees is free
+- among the employees on duty and free in a slot, the booking goes to whoever
+  holds the fewest appointments still `BOOKED`, ties broken by primary key. The
+  balance is best-effort under simultaneous requests: the counts are read
+  before the insert, so what is guaranteed is only that nobody is double-booked
+- if a simultaneous request takes the chosen employee first, the booking is
+  retried with the next colleague free in that slot; the student is told the
+  slot is gone only when nobody on duty is left
 - cancelling frees the slot again, which is why the uniqueness constraint on
   `(employee, slot)` only applies to appointments still in `BOOKED`
-- slots in the past, inactive offices and offices with no staff are refused
+- slots in the past, inactive offices and slots nobody is on duty for are
+  refused
 - an appointment is completed by the employee handling it, and only once it
   has started: "completed" means the question was answered, which cannot have
   happened at a meeting still in the future. It is the mirror of the rule that
@@ -309,6 +317,27 @@ them, an admin all of them. Asking for someone else's appointment returns
 `404`, not `403`: whether it exists is not the caller's business. Completing
 is the one action scoping alone does not protect — a student reaches their own
 appointment legitimately — so `IsEmployee` guards it explicitly.
+
+### Shifts
+
+Employees set up their own availability. After registering, an employee
+chooses their office once (`POST /api/employee-profile/`); from then on only an
+admin can move them, because changing office would leave their booked
+appointments with an office they no longer work for. Shifts are then declared
+and withdrawn through `booking/services.py`, covered by
+`tests/test_booking_shifts.py`:
+
+- a shift repeats every week on one weekday; an employee can have several on
+  the same day (a morning and an afternoon) but they cannot overlap
+- a shift starts and ends on the office's slot grid: at a 30-minute office,
+  9:15 is refused, because the quarter of an hour before 9:30 could never be
+  booked. If the office's slot length changes later, existing shifts are left
+  as they are and offer the slots they still cover whole
+- a shift cannot be withdrawn while the employee's own future `BOOKED`
+  appointments fall inside it; the refusal lists them, so the employee cancels
+  them first. There is no edit: changing a shift is withdrawing it and
+  declaring another, so both rules apply to every change
+- shifts written from the admin skip these checks, as appointments do
 
 ## FAQ
 

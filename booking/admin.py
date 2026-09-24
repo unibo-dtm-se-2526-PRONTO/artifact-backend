@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Appointment, EmployeeProfile, Office
+from .models import Appointment, EmployeeProfile, Office, Shift
 
 
 @admin.register(Office)
@@ -16,8 +16,16 @@ class OfficeAdmin(admin.ModelAdmin):
     search_fields = ["code", "name_it", "name_en"]
 
 
+class ShiftInline(admin.TabularInline):
+    # Written straight to the table: the grid and overlap rules of
+    # `declare_shift` are not applied here, so an admin has to keep to them.
+    model = Shift
+    extra = 0
+
+
 @admin.register(EmployeeProfile)
 class EmployeeProfileAdmin(admin.ModelAdmin):
+    inlines = [ShiftInline]
     list_display = ["user", "office"]
     list_filter = ["office"]
     search_fields = ["user__email"]

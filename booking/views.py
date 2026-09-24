@@ -9,19 +9,24 @@ from rest_framework.views import APIView
 from pronto.enums import Role
 from pronto.i18n import LanguageAwareMixin
 
-from .models import Appointment, Office
+from .models import Appointment, EmployeeProfile, Office, Shift
 from .permissions import IsEmployee, IsStudent
 from .serializers import (
     AppointmentCreateSerializer,
     AppointmentSerializer,
     AvailabilitySerializer,
+    EmployeeProfileSerializer,
     OfficeSerializer,
+    ShiftSerializer,
 )
 from .services import (
     BookingError,
+    ShiftInUseError,
     available_slots,
     cancel_appointment,
     complete_appointment,
+    declare_shift,
+    withdraw_shift,
 )
 
 
@@ -130,4 +135,84 @@ class AppointmentCompleteView(AppointmentQuerysetMixin, generics.GenericAPIView)
             complete_appointment(self.get_object())
         except BookingError as error:
             return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EmployeeProfileView(APIView):
+    """The office the calling employee works for.
+
+    Chosen once: changing office would leave the appointments already booked
+    with the old one assigned to someone who no longer works there, so after
+    the first choice only an admin can move an employee.
+    """
+
+    permission_classes = [IsAuthenticated, IsEmployee]
+
+    def get(self, request):
+        profile = get_object_or_404(EmployeeProfile, user=request.user)
+        return Response(EmployeeProfileSerializer(profile).data)
+
+    def post(self, request):
+        if EmployeeProfile.objects.filter(user=request.user).exists():
+            return Response(
+                {
+                    "detail": "Your office is already set; ask an administrator to change it."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = EmployeeProfileSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ShiftListCreateView(APIView):
+    """The calling employee's weekly shifts, or a new one.
+
+    There is no update: replacing a shift is withdrawing it and declaring
+    another, so the rules on both sides apply to every change.
+    """
+
+    permission_classes = [IsAuthenticated, IsEmployee]
+
+    def get(self, request):
+        # No profile yet means no shifts yet, not an error.
+        shifts = Shift.objects.filter(employee__user=request.user)
+        return Response(ShiftSerializer(shifts, many=True).data)
+
+    def post(self, request):
+        profile = EmployeeProfile.objects.filter(user=request.user).first()
+        if profile is None:
+            return Response(
+                {"detail": "Choose your office before declaring shifts."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = ShiftSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            shift = declare_shift(employee=profile, **serializer.validated_data)
+        except BookingError as error:
+            return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ShiftSerializer(shift).data, status=status.HTTP_201_CREATED)
+
+
+class ShiftDetailView(APIView):
+    """Withdraw one of the calling employee's shifts."""
+
+    permission_classes = [IsAuthenticated, IsEmployee]
+
+    def delete(self, request, pk):
+        # Scoped to the caller: someone else's shift answers 404, as
+        # someone else's appointment does.
+        shift = get_object_or_404(Shift, pk=pk, employee__user=request.user)
+        try:
+            withdraw_shift(shift)
+        except ShiftInUseError as error:
+            return Response(
+                {
+                    "detail": str(error),
+                    "appointments": [held.pk for held in error.appointments],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)

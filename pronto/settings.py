@@ -110,13 +110,6 @@ EMAIL_BACKEND = os.getenv(
 )
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@pronto.local")
 
-# Booking timetable. The helpdesk keeps the same hours at every office; only
-# the length of a slot varies, and that is stored on the Office itself.
-# Monday to Friday, as weekday() numbers them.
-BOOKING_WORKING_DAYS = (0, 1, 2, 3, 4)
-BOOKING_OPENING_HOUR = 9
-BOOKING_CLOSING_HOUR = 17
-
 # Where the verification link sent by email points to.
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
 
@@ -190,8 +183,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-# The helpdesk is in Cesena and its timetable is written in local time: the
-# opening hours below are 9-17 for the office, not 9-17 UTC. Every aware
+# The helpdesk is in Cesena and its timetable is written in local time: a shift
+# declared 9-17 is 9-17 at the office, not 9-17 UTC. Every aware
 # datetime the booking grid builds goes through the active timezone, so this
 # is what makes a slot mean what the staff and the students think it means.
 TIME_ZONE = "Europe/Rome"

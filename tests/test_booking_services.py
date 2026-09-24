@@ -43,7 +43,7 @@ def book(student, office, slot):
 
 
 @pytest.mark.django_db
-def test_available_slots_spans_the_opening_hours(office, employee, day):
+def test_available_slots_spans_the_employee_shift(office, employee, day):
     slots = available_slots(office, day)
 
     assert slots[0] == slot_at(day, 9)
@@ -206,35 +206,65 @@ def test_consecutive_bookings_are_spread_evenly_across_the_office(
     assert max(loads) - min(loads) <= 1
 
 
-@pytest.mark.django_db
-def test_book_appointment_reports_a_slot_lost_in_the_race(
-    office, employee, student, day, monkeypatch
-):
-    """FR9/NFR1: the loser of a race is told to pick again, not given a 500.
+def lose_the_first_pick_to(rival, monkeypatch):
+    """Make the first employee `book_appointment` picks get taken under it.
 
     `book_appointment` reads who is free and then inserts, and nothing stops
     another request from slipping between the two. Rather than hope two real
     threads interleave that way — which would make the suite flaky and prove
     nothing on the runs where they do not — the rival booking is inserted from
-    inside `_free_employee`, which is exactly that window.
+    inside `_free_employee`, which is exactly that window. Only the first pick
+    is stolen: a real rival books once.
     """
-    rival = make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT)
-    slot = slot_at(day, 10)
     choose = services._free_employee
+    stolen = []
 
     def choose_then_lose_the_slot(office_, slot_):
         chosen = choose(office_, slot_)
-        Appointment.objects.create(
-            student=rival,
-            office=office_,
-            employee=chosen,
-            slot=slot_,
-            question_text="Sono arrivata un istante prima.",
-            question_lang="it",
-        )
+        if not stolen:
+            stolen.append(
+                Appointment.objects.create(
+                    student=rival,
+                    office=office_,
+                    employee=chosen,
+                    slot=slot_,
+                    question_text="Sono arrivata un istante prima.",
+                    question_lang="it",
+                )
+            )
         return chosen
 
     monkeypatch.setattr(services, "_free_employee", choose_then_lose_the_slot)
+    return stolen
+
+
+@pytest.mark.django_db
+def test_a_booking_lost_in_the_race_goes_to_a_free_colleague(
+    office, employee, student, day, monkeypatch
+):
+    """seq2: losing an employee to a rival is not losing the slot while a
+    colleague on duty is still free — the service tries the next one."""
+    colleague = make_employee(office, "luca.verdi@unibo.it")
+    rival = make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT)
+    slot = slot_at(day, 10)
+    stolen = lose_the_first_pick_to(rival, monkeypatch)
+
+    appointment = book(student, office, slot)
+
+    assert stolen[0].employee == employee
+    assert appointment.employee == colleague
+    assert Appointment.objects.filter(slot=slot).count() == 2
+
+
+@pytest.mark.django_db
+def test_book_appointment_reports_a_slot_lost_in_the_race(
+    office, employee, student, day, monkeypatch
+):
+    """FR9/NFR1: once nobody is left, the loser is told to pick again, not
+    given a 500."""
+    rival = make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT)
+    slot = slot_at(day, 10)
+    lose_the_first_pick_to(rival, monkeypatch)
 
     with pytest.raises(BookingError):
         book(student, office, slot)
@@ -253,13 +283,17 @@ def test_book_appointment_rejects_a_slot_in_the_past(office, employee, student, 
 
 
 @pytest.mark.django_db
-def test_book_appointment_rejects_a_slot_before_opening(office, employee, student, day):
+def test_book_appointment_rejects_a_slot_before_the_shift(
+    office, employee, student, day
+):
     with pytest.raises(BookingError):
         book(student, office, slot_at(day, 8))
 
 
 @pytest.mark.django_db
-def test_book_appointment_rejects_a_slot_after_closing(office, employee, student, day):
+def test_book_appointment_rejects_a_slot_after_the_shift(
+    office, employee, student, day
+):
     with pytest.raises(BookingError):
         book(student, office, slot_at(day, 17))
 

@@ -242,6 +242,11 @@ how the app behaves outside tests:
 | `DEBUG` | `False` | Accepts `1`, `true`, `yes`, `on`. Off unless asked for, so a deployment that forgets it does not serve tracebacks |
 | `ALLOWED_HOSTS` | empty | Comma-separated. Required once `DEBUG` is off; in debug it defaults to localhost |
 
+E-mails are printed to the console unless `EMAIL_BACKEND` is set to
+`django.core.mail.backends.smtp.EmailBackend`; the SMTP server is then read
+from `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` and
+`EMAIL_USE_TLS`, all listed in `.env.example`.
+
 `TIME_ZONE` is `Europe/Rome`, and this is load-bearing rather than cosmetic:
 the booking grid builds its slots in the active timezone, so a shift declared
 9-17 means the office's nine to five. Under UTC the same shift would offer
@@ -265,7 +270,7 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 | GET    | `/api/offices/`                         | token   | The offices currently taking bookings            |
 | GET    | `/api/offices/<code>/availability/`     | token   | Free slots on `?date=YYYY-MM-DD` (required)      |
 | GET    | `/api/appointments/`                    | token   | The caller's own appointments                    |
-| POST   | `/api/appointments/`                    | student | Book a slot; the employee is assigned server-side |
+| POST   | `/api/appointments/`                    | student | Book a slot; the employee is assigned server-side. Optional `faq_id`: the FAQ the student was shown and did not find helpful |
 | POST   | `/api/appointments/<id>/cancel/`        | student / employee | Cancel one of the caller's appointments |
 | POST   | `/api/appointments/<id>/complete/`      | employee | Record that an appointment assigned to the caller took place |
 | GET    | `/api/employee-profile/`                | employee | The caller's office; `404` until one is chosen   |
@@ -338,6 +343,31 @@ and withdrawn through `booking/services.py`, covered by
   them first. There is no edit: changing a shift is withdrawing it and
   declaring another, so both rules apply to every change
 - shifts written from the admin skip these checks, as appointments do
+
+### Notifications
+
+Every booking and cancellation sends e-mails, from `booking/notifications.py`,
+covered by `tests/test_booking_notifications.py`:
+
+| Event | Who is told | Language |
+|-------|-------------|----------|
+| booked | the student, as a confirmation | the language of the question |
+| booked | the assigned employee, with the question and the FAQ that did not help | Italian |
+| cancelled by the student | the employee | Italian |
+| cancelled by the employee | the student | the language of the question |
+| cancelled by an admin | both | as above |
+
+Completing an appointment sends nothing. Each e-mail carries the office, the
+date and time in the helpdesk's local time, and the question, so it can be
+acted on without opening the app.
+
+The service registers the e-mails inside the transaction that changes the
+appointment, and they are sent only once it commits: a booking that is rolled
+back, or lost to a simultaneous request, tells nobody. Delivery is
+best-effort. A failed e-mail is logged and the booking stands, and each e-mail
+goes out on its own, so one bounced address does not silence the other. The
+texts are plain-text templates in `booking/templates/booking/email/`, one per
+e-mail and language, with the subject on the first line.
 
 ## FAQ
 

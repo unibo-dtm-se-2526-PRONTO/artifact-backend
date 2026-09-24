@@ -1,0 +1,12 @@
+{% autoescape off %}Pronto: appuntamento confermato con {{ office }}
+
+Il tuo appuntamento è confermato.
+
+Ufficio: {{ office }}
+Quando: {{ when }}
+
+La tua domanda:
+{{ appointment.question_text }}
+
+Se non puoi più venire, annulla l'appuntamento da Pronto: così il posto torna libero per un altro studente.
+{% endautoescape %}

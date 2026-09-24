@@ -1,0 +1,11 @@
+{% autoescape off %}Pronto: appuntamento annullato {{ when }}
+
+Un appuntamento che ti era stato assegnato è stato annullato.
+
+Studente: {% if student.get_full_name %}{{ student.get_full_name }} ({{ student.email }}){% else %}{{ student.email }}{% endif %}
+Ufficio: {{ office }}
+Quando: {{ when }}
+
+La domanda dello studente:
+{{ appointment.question_text }}
+{% endautoescape %}

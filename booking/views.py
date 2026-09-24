@@ -118,7 +118,7 @@ class AppointmentCancelView(AppointmentQuerysetMixin, generics.GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            cancel_appointment(self.get_object())
+            cancel_appointment(self.get_object(), by=request.user)
         except BookingError as error:
             return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)

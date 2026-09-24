@@ -344,7 +344,7 @@ def test_withdraw_shift_refuses_while_it_covers_a_booked_appointment(
 def test_withdraw_shift_is_allowed_once_the_appointment_is_cancelled(
     office, employee, student, day
 ):
-    cancel_appointment(book(student, office, slot_at(day, 10)))
+    cancel_appointment(book(student, office, slot_at(day, 10)), by=student)
     monday = employee.shifts.get(weekday=MONDAY)
 
     withdraw_shift(monday)

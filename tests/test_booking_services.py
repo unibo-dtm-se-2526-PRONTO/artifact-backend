@@ -134,7 +134,7 @@ def test_a_cancelled_appointment_frees_the_slot(office, employee, student, day):
     appointment = book(student, office, slot)
     assert slot not in available_slots(office, day)
 
-    cancel_appointment(appointment)
+    cancel_appointment(appointment, by=student)
 
     assert slot in available_slots(office, day)
 
@@ -344,7 +344,7 @@ def test_book_appointment_fails_when_every_employee_is_busy(
 def test_cancel_appointment_marks_it_cancelled(office, employee, student, day):
     appointment = book(student, office, slot_at(day, 9))
 
-    cancel_appointment(appointment)
+    cancel_appointment(appointment, by=student)
 
     appointment.refresh_from_db()
     assert appointment.status == AppointmentStatus.CANCELLED
@@ -355,10 +355,10 @@ def test_cancel_appointment_rejects_an_already_cancelled_one(
     office, employee, student, day
 ):
     appointment = book(student, office, slot_at(day, 9))
-    cancel_appointment(appointment)
+    cancel_appointment(appointment, by=student)
 
     with pytest.raises(BookingError):
-        cancel_appointment(appointment)
+        cancel_appointment(appointment, by=student)
 
 
 @pytest.mark.django_db
@@ -374,7 +374,7 @@ def test_cancel_appointment_rejects_a_past_appointment(office, employee, student
     )
 
     with pytest.raises(BookingError):
-        cancel_appointment(appointment)
+        cancel_appointment(appointment, by=student)
 
 
 # --- complete_appointment ----------------------------------------------------

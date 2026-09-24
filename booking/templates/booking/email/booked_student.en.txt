@@ -1,0 +1,12 @@
+{% autoescape off %}Pronto: your appointment with {{ office }} is confirmed
+
+Your appointment is confirmed.
+
+Office: {{ office }}
+When: {{ when }}
+
+Your question:
+{{ appointment.question_text }}
+
+If you can no longer make it, cancel the appointment in Pronto so the slot is free for another student.
+{% endautoescape %}

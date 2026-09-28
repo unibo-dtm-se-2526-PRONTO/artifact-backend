@@ -8,9 +8,9 @@ from rest_framework.views import APIView
 
 from pronto.enums import Role
 from pronto.i18n import LanguageAwareMixin
+from pronto.permissions import IsEmployee, IsStudent
 
 from .models import Appointment, EmployeeProfile, Office, Shift
-from .permissions import IsEmployee, IsStudent
 from .serializers import (
     AppointmentCreateSerializer,
     AppointmentSerializer,

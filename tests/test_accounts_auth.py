@@ -22,6 +22,8 @@ def user(db):
         User.Role.STUDENT,
         first_name="Mario",
         last_name="Rossi",
+        matricola="0001012345",
+        degree_programme="Ingegneria e scienze informatiche",
     )
 
 
@@ -139,6 +141,8 @@ def test_me_returns_the_authenticated_user(authenticated_client, user):
         "role": User.Role.STUDENT,
         "first_name": "Mario",
         "last_name": "Rossi",
+        "matricola": "0001012345",
+        "degree_programme": "Ingegneria e scienze informatiche",
     }
 
 
@@ -156,3 +160,25 @@ def test_token_is_no_longer_accepted_after_logout(authenticated_client):
     response = authenticated_client.get(ME_URL)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+def test_me_gives_an_employee_no_student_data(db):
+    employee = make_user(
+        "anna.bianchi@unibo.it",
+        User.Role.EMPLOYEE,
+        first_name="Anna",
+        last_name="Bianchi",
+    )
+
+    response = authenticate(employee).get(ME_URL)
+
+    assert response.json() == {
+        "id": employee.id,
+        "email": "anna.bianchi@unibo.it",
+        "role": User.Role.EMPLOYEE,
+        "first_name": "Anna",
+        "last_name": "Bianchi",
+        "matricola": "",
+        "degree_programme": "",
+    }

@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 
 from pronto.enums import Role
@@ -30,6 +31,18 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
+# A Unibo matricola is a number, but stored as text: the leading zeros are part
+# of it. Current ones have ten digits, padded with zeros ("0001012345"); older
+# ones are shorter, down to six. Nothing is padded or stripped, so a matricola
+# is stored exactly as the student's university documents print it.
+matricola_validator = RegexValidator(
+    r"^[0-9]{6,10}$", "A matricola is a number of 6 to 10 digits."
+)
+# Given both to the field, which is what the API reports, and to the
+# constraint, which is what the admin reports.
+MATRICOLA_TAKEN = "A student with this matricola is already registered."
+
+
 class User(AbstractUser):
     """University student or employee, identified by their institutional email."""
 
@@ -49,6 +62,25 @@ class User(AbstractUser):
         verbose_name="ruolo",
         help_text="Derivato dal dominio dell'indirizzo email in fase di registrazione.",
     )
+    # Students only, and required of them. Blank by default, and not NULL, so
+    # the accounts that predate these columns, employees and admins included,
+    # stay valid rows; clean() enforces them by role.
+    matricola = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        validators=[matricola_validator],
+        error_messages={"unique": MATRICOLA_TAKEN},
+        verbose_name="matricola",
+        help_text="Solo per gli studenti: il numero di matricola Unibo, da 6 a 10 cifre.",
+    )
+    degree_programme = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="corso di studi",
+        help_text="Solo per gli studenti: il corso di laurea a cui sono iscritti.",
+    )
     is_active = models.BooleanField(
         default=False,
         verbose_name="attivo",
@@ -67,6 +99,16 @@ class User(AbstractUser):
     class Meta:
         verbose_name = "utente"
         verbose_name_plural = "utenti"
+        constraints = [
+            # Unique among the matricole actually given: everybody who is not a
+            # student has an empty one.
+            models.UniqueConstraint(
+                fields=["matricola"],
+                condition=~models.Q(matricola=""),
+                name="unique_matricola",
+                violation_error_message=MATRICOLA_TAKEN,
+            ),
+        ]
 
     def __str__(self):
         return self.email
@@ -85,5 +127,11 @@ class User(AbstractUser):
             for field in ("first_name", "last_name"):
                 if not getattr(self, field).strip():
                     errors[field] = "This field is required."
+        for field in ("matricola", "degree_programme"):
+            given = bool(getattr(self, field).strip())
+            if self.role == Role.STUDENT and not given:
+                errors[field] = "This field is required."
+            elif self.role != Role.STUDENT and given:
+                errors[field] = "Only students have this field."
         if errors:
             raise ValidationError(errors)

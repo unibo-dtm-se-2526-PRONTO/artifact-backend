@@ -17,6 +17,8 @@ STUDENT = {
     "password": PASSWORD,
     "first_name": "Mario",
     "last_name": "Rossi",
+    "matricola": "0001012345",
+    "degree_programme": "Ingegneria e scienze informatiche",
 }
 EMPLOYEE = {
     "email": "anna.bianchi@unibo.it",
@@ -235,3 +237,114 @@ def test_names_are_trimmed(client):
 
     user = User.objects.get()
     assert (user.first_name, user.last_name) == ("Mario", "Rossi")
+
+
+# Student data
+
+
+@pytest.mark.django_db
+def test_a_student_is_registered_with_matricola_and_degree_programme(client):
+    response = client.post(URL, STUDENT, format="json")
+
+    assert response.status_code == status.HTTP_201_CREATED
+    user = User.objects.get()
+    assert user.matricola == "0001012345"
+    assert user.degree_programme == "Ingegneria e scienze informatiche"
+
+
+@pytest.mark.django_db
+def test_registration_returns_the_new_account_without_the_password(client):
+    response = client.post(URL, STUDENT, format="json")
+
+    assert response.json() == {
+        "id": User.objects.get().id,
+        "email": "mario.rossi@studio.unibo.it",
+        "role": User.Role.STUDENT,
+        "first_name": "Mario",
+        "last_name": "Rossi",
+        "matricola": "0001012345",
+        "degree_programme": "Ingegneria e scienze informatiche",
+    }
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("field", ["matricola", "degree_programme"])
+@pytest.mark.parametrize("missing", ["absent", "", "   "])
+def test_a_student_without_matricola_or_degree_programme_is_rejected(
+    client, field, missing
+):
+    payload = {key: value for key, value in STUDENT.items() if key != field}
+    if missing != "absent":
+        payload[field] = missing
+
+    response = client.post(URL, payload, format="json")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert field in response.json()
+    assert not User.objects.exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "matricola",
+    ["0001012345", "0000123456", "123456", "9876543"],
+    ids=["current", "current-low", "old-6-digits", "old-7-digits"],
+)
+def test_a_numeric_matricola_of_six_to_ten_digits_is_accepted(client, matricola):
+    response = client.post(URL, {**STUDENT, "matricola": matricola}, format="json")
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert User.objects.get().matricola == matricola
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "matricola",
+    ["12345", "00010123456", "00010A2345", "0001-12345", "MRARSS00A01"],
+    ids=["too-short", "too-long", "letter", "dash", "fiscal-code"],
+)
+def test_a_malformed_matricola_is_rejected(client, matricola):
+    response = client.post(URL, {**STUDENT, "matricola": matricola}, format="json")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "matricola" in response.json()
+    assert not User.objects.exists()
+
+
+@pytest.mark.django_db
+def test_a_matricola_already_registered_is_rejected(client):
+    client.post(URL, STUDENT, format="json")
+
+    response = client.post(
+        URL, {**STUDENT, "email": "mario.rossi2@studio.unibo.it"}, format="json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "matricola" in response.json()
+    assert User.objects.count() == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "field, value",
+    [("matricola", "0001012345"), ("degree_programme", "Ingegneria")],
+)
+def test_an_employee_giving_student_data_is_rejected(client, field, value):
+    # Refused rather than dropped: an employee sending a matricola has most
+    # likely typed the wrong address, and silently ignoring it would hide that.
+    response = client.post(URL, {**EMPLOYEE, field: value}, format="json")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert field in response.json()
+    assert not User.objects.exists()
+
+
+@pytest.mark.django_db
+def test_an_employee_is_registered_without_student_data(client):
+    response = client.post(
+        URL, {**EMPLOYEE, "matricola": "", "degree_programme": ""}, format="json"
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    user = User.objects.get()
+    assert (user.matricola, user.degree_programme) == ("", "")

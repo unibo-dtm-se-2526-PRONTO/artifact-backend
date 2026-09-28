@@ -10,7 +10,14 @@ class UserCreationFormWithoutUsername(UserCreationForm):
 
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ("email", "role", "first_name", "last_name")
+        fields = (
+            "email",
+            "role",
+            "first_name",
+            "last_name",
+            "matricola",
+            "degree_programme",
+        )
 
 
 @admin.register(User)
@@ -23,12 +30,15 @@ class UserAdmin(DjangoUserAdmin):
 
     list_display = ["email", "last_name", "first_name", "role", "is_active", "is_staff"]
     list_filter = ["role", "is_active", "is_staff"]
-    search_fields = ["email", "last_name", "first_name"]
+    search_fields = ["email", "last_name", "first_name", "matricola"]
     ordering = ["email"]
 
     fieldsets = [
         (None, {"fields": ("email", "password")}),
-        ("Anagrafica", {"fields": ("first_name", "last_name")}),
+        (
+            "Anagrafica",
+            {"fields": ("first_name", "last_name", "matricola", "degree_programme")},
+        ),
         (
             "Ruolo e permessi",
             {
@@ -54,6 +64,8 @@ class UserAdmin(DjangoUserAdmin):
                     "role",
                     "first_name",
                     "last_name",
+                    "matricola",
+                    "degree_programme",
                     "usable_password",
                     "password1",
                     "password2",

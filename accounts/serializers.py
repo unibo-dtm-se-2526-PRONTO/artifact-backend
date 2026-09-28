@@ -37,10 +37,21 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "password", "role", "first_name", "last_name"]
+        fields = [
+            "id",
+            "email",
+            "password",
+            "role",
+            "first_name",
+            "last_name",
+            "matricola",
+            "degree_programme",
+        ]
         read_only_fields = ["id", "role"]
         # Blank-able on the model, for the accounts that predate them, but
-        # mandatory for anyone signing up.
+        # mandatory for anyone signing up. The student data stays optional
+        # here: whether it is required or refused depends on the role, which
+        # validate() derives and checks through the model's clean().
         extra_kwargs = {
             "first_name": {"required": True, "allow_blank": False},
             "last_name": {"required": True, "allow_blank": False},
@@ -103,5 +114,13 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "role", "first_name", "last_name"]
+        fields = [
+            "id",
+            "email",
+            "role",
+            "first_name",
+            "last_name",
+            "matricola",
+            "degree_programme",
+        ]
         read_only_fields = fields

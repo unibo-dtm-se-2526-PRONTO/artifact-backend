@@ -7,7 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir poetry
+# The one Poetry version of the project: CI reads it from this line, so bump
+# it here and nowhere else.
+ARG POETRY_VERSION=2.2.1
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 
 COPY pyproject.toml poetry.lock ./
 RUN poetry install --no-root --only main

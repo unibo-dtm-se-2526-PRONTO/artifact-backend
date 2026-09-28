@@ -137,11 +137,13 @@ file needs the same cast.
 the backend runs on in production:
 
 1. **Preliminary Checks** — `poe compile`, `poe static-checks`,
-   `poe format-check`, then the suite with coverage on SQLite. The HTML
-   coverage report is uploaded as a build artifact.
-2. **Test on PostgreSQL** — the suite again, against a `postgres:16` service
-   container with the same credentials as the compose `db`, selected through
-   `TEST_DATABASE_URL`. This is where the `postgres` tests run.
+   `poe format-check`, then the suite on SQLite.
+2. **Test on PostgreSQL** — the suite again, with coverage, against a
+   `postgres:16` service container with the same credentials as the compose
+   `db`, selected through `TEST_DATABASE_URL`. This is where the `postgres`
+   tests run, and so the only run that reaches the FAQ matching: coverage is
+   measured here for that reason. The HTML report is uploaded as a build
+   artifact.
 3. **Deploy** — semantic-release, which only releases from `master` (see
    below).
 
@@ -209,6 +211,8 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 | GET    | `/api/auth/me/`                         | token   | The authenticated user's own data                |
 | GET    | `/api/faqs/`                            | public  | Published FAQs; filter with `?office=<code>`     |
 | GET    | `/api/faqs/<id>/`                       | public  | A single published FAQ                           |
+| POST   | `/api/questions/`                       | student | Ask about an office: `{"office": "<code>", "question": "<text>"}`; returns the best-matching FAQ, if any. `?lang` is the language of the question |
+| POST   | `/api/questions/<uuid>/resolve/`        | student | The suggested FAQ answered the question; `400` if none was suggested |
 | GET    | `/api/offices/`                         | token   | The offices currently taking bookings            |
 | GET    | `/api/offices/<code>/availability/`     | token   | Free slots on `?date=YYYY-MM-DD` (required)      |
 | GET    | `/api/appointments/`                    | token   | The caller's own appointments                    |
@@ -223,7 +227,9 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 
 Every endpoint that returns stored text accepts `?lang=it|en` (`it` by
 default) and answers with neutral keys — `name`, `question`, `answer` — instead
-of exposing the `_it` / `_en` columns. An unsupported code is a `400`.
+of exposing the `_it` / `_en` columns. An unsupported code is a `400`. The
+questions endpoints are the one twist: there `lang` is the language the
+question is written in, and an inquiry is always read back in that language.
 
 ## Booking
 
@@ -263,7 +269,9 @@ A student sees only their own appointments, an employee only those assigned to
 them, an admin all of them. Asking for someone else's appointment returns
 `404`, not `403`: whether it exists is not the caller's business. Completing
 is the one action scoping alone does not protect — a student reaches their own
-appointment legitimately — so `IsEmployee` guards it explicitly.
+appointment legitimately — so `IsEmployee` guards it explicitly. `IsStudent`
+and `IsEmployee` live in `pronto/permissions.py`, because `faq` needs
+`IsStudent` too and cannot import from `booking`.
 
 ### Shifts
 
@@ -321,6 +329,93 @@ is not exposed over HTTP at all — FAQs are maintained in the Django admin.
 key to `booking.Office`: the two slices share the `OfficeCode` enum in
 `pronto/enums.py` and nothing else, so neither has to migrate or deploy with
 the other.
+
+### Asking a question
+
+Before booking, a student picks an office and writes their question
+(`POST /api/questions/?lang=it|en`). The answer, `201`:
+
+```json
+{
+  "id": "5b0e6a0e-3f0c-4d7e-9d3a-0c5e8f1b2a47",
+  "office": "ADMIN_OFFICE",
+  "language": "it",
+  "match": {
+    "faq": {"id": 3, "question": "Come attivo un tirocinio?", "answer": "..."},
+    "office": "INTERNSHIPS",
+    "score": 0.61
+  },
+  "office_reassigned": true,
+  "resolved": false
+}
+```
+
+`match` is `null` when no FAQ is relevant enough. `office` is the office the
+student asked; `match.office` the one the answer belongs to, and
+`office_reassigned` says they differ, so the client can offer to book with the
+right office. If the answer helps, the client calls
+`POST /api/questions/<id>/resolve/` and the flow ends there; if not, it books
+through `POST /api/appointments/` as usual, passing `match.faq.id` as `faq_id`.
+Resolving an inquiry that is already resolved answers `200` again, so a retry
+is harmless; one with no suggested FAQ is a `400`. Both endpoints return the
+same shape, with texts in the language the question was asked in. Only
+students ask and resolve.
+
+Each question is stored as a `faq.Inquiry`, to see what students need that the
+FAQs do not cover. It records the office, the text, the language, the FAQ
+suggested and its score, and whether it resolved the question — and on purpose
+nothing else:
+
+- **no user**: what was asked is what the knowledge base needs, not who asked
+  it, so the questions stay anonymous from the start;
+- **no appointment**: when the answer does not help, the appointment records
+  the FAQ that was shown (`suggested_faq`), so `booking` depends on `faq` and
+  never the other way round;
+- **a UUID primary key**: the id is handed to the client to resolve the
+  question later, and with no user to scope by, an id nobody can guess or
+  count is what keeps one student from closing another's question.
+
+The inquiries are listed, read-only, in the admin.
+
+### FAQ matching
+
+The matching lives in `faq/matching.py`; `faq/services.py` stores the result.
+It is PostgreSQL full-text search, from `django.contrib.postgres.search`:
+
+- only published FAQs are searched, in the language of the question: its
+  question and answer columns, with the `italian` or `english` text search
+  configuration, which does the stemming (`certificati` finds `certificato`)
+  and drops the stop words (`come`, `il`, `dove`, ...);
+- the FAQ's question is weighted `A` and its answer `B`, so a word the FAQ is
+  about counts more than one its answer mentions;
+- the words of the question are OR-ed (a `websearch` query): a student writes
+  a sentence, and requiring every word of it would match almost nothing.
+  `ts_rank` averages over the words of the question, so a FAQ scores by how
+  much of the question it covers, and short and long questions are comparable;
+- a FAQ is suggested only if its score reaches `FAQ_MATCH_MIN_RANK`, `0.1` by
+  default, in `pronto/settings.py`. On the examples in
+  `tests/test_faq_matching.py`, questions a FAQ answers score 0.15 to 0.65,
+  while one that only shares a word with an answer (the "online" of "Studenti
+  Online") scores 0.04. The comment on the setting explains the choice;
+- the office the student chose is searched first. Only if nothing there
+  reaches the threshold are all offices searched, and the best of those is
+  returned with its own office.
+
+The vectors are computed at query time, with no stored column and no GIN
+index: the knowledge base is a few hundred rows at most, where an index would
+not pay for itself. That is the first thing to revisit if it grows by orders
+of magnitude.
+
+The search only exists on PostgreSQL. On any other database the service raises
+`MatchingUnavailable` instead of reporting "no match", which would look exactly
+like a knowledge base with no answer; the tests that reach it are marked
+`postgres`.
+
+Semantic search over embeddings (Chroma, IR4) is a planned extension and is
+not implemented. The service is split for it: a matcher (`FullTextMatcher`)
+only finds the best candidate among a set of FAQs, with its own score and
+threshold, while `find_best_match` applies the office-first policy on top. A
+vector matcher would implement the same `Matcher` protocol and be passed in.
 
 ## Accounts
 

@@ -1,14 +1,19 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import AdminUserCreationForm
 
 from .models import User
 
 
-class UserCreationFormWithoutUsername(UserCreationForm):
-    """Django's own creation form, retargeted at email as the credential."""
+class UserCreationFormWithoutUsername(AdminUserCreationForm):
+    """Django's own admin creation form, retargeted at email as the credential.
 
-    class Meta(UserCreationForm.Meta):
+    The admin one, not ``UserCreationForm``: only it declares the
+    ``usable_password`` field that ``add_fieldsets`` lists, and with the plain
+    form the add page fails with a ``FieldError`` before it renders.
+    """
+
+    class Meta(AdminUserCreationForm.Meta):
         model = User
         fields = (
             "email",

@@ -13,12 +13,16 @@ so the booking tests written against it still describe a real office.
 Fixture names are deliberately specific (`office`, `student`, `employee`)
 rather than generic, so nothing here shadows what another test file defines
 for itself.
+
+It also holds the one hook every test file relies on: tests marked
+`@pytest.mark.postgres` are skipped unless the suite runs on PostgreSQL.
 """
 
 from datetime import datetime, time, timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
@@ -29,6 +33,24 @@ from pronto.enums import OfficeCode
 User = get_user_model()
 
 PASSWORD = "s3cret-passphrase"
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip the tests marked `postgres` when the database is not PostgreSQL.
+
+    Some behaviour cannot be observed on SQLite at all — full-text search does
+    not exist there, and it locks the whole database rather than a row — so a
+    test of it would fail for the wrong reason. Skipping says so in the report
+    instead. `connection.vendor` comes from the configured backend and needs no
+    connection, so this runs before any test touches the database.
+    """
+    if connection.vendor == "postgresql":
+        return
+    skip = pytest.mark.skip(reason="needs PostgreSQL: set TEST_DATABASE_URL")
+    for item in items:
+        if "postgres" in item.keywords:
+            item.add_marker(skip)
+
 
 # Monday to Friday, as weekday() numbers them, nine to five.
 WORKING_WEEK = [(weekday, time(9), time(17)) for weekday in range(5)]

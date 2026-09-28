@@ -123,12 +123,15 @@ Two reference examples to copy from:
 - `tests/test_faq_models.py` — database tests using the `@pytest.mark.django_db`
   marker, which gives each test a clean, isolated database
 
-`tests/conftest.py` holds the fixtures the booking test files share — two
-offices, their staff, a student, their authenticated clients, and a `day` that
-is always a Monday in the future. Every employee it makes works Monday to
-Friday, 9 to 17, unless a test passes other `shifts` to `make_employee`. Fixtures stay local to a file while one file
-owns them, as the accounts tests do; they move to `conftest.py` once a second
-file needs the same cast.
+`tests/conftest.py` holds what more than one test file needs. For the booking
+tests, two offices, their staff, a student, their authenticated clients, and a
+`day` that is always a Monday in the future; every employee it makes works
+Monday to Friday, 9 to 17, unless a test passes other `shifts` to
+`make_employee`. For the accounts and FAQ tests, an anonymous `client` (DRF's
+`APIClient`, replacing pytest-django's fixture of the same name), the
+`PASSWORD` every test user is given, and `authenticate(user)`, which returns a
+client carrying that user's token. Fixtures stay local to a file while one file
+owns them; they move to `conftest.py` once a second file needs them.
 
 ## Continuous integration
 

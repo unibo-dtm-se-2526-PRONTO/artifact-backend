@@ -1,10 +1,11 @@
-"""Fixtures shared by the booking tests.
+"""Fixtures shared by more than one test file.
 
-The accounts tests keep their fixtures local, which works while one file owns
-them. The booking slice is tested from several angles — models, constraints,
-services, offices and appointments — and all of them need the same cast: an
-office, someone staffing it, a student, and a day in the future that is not a
-weekend.
+A fixture moves here once a second file needs it. The booking slice is tested
+from several angles — models, constraints, services, offices and appointments —
+and all of them need the same cast: an office, someone staffing it, a student,
+and a day in the future that is not a weekend. The accounts and FAQ tests share
+less: an anonymous `client`, the `PASSWORD` every test user has, and
+`authenticate` to give a user a token.
 
 Every employee made here works Monday to Friday, 9 to 17, unless a test asks
 for other shifts. That is the timetable the helpdesk had before shifts existed,
@@ -12,7 +13,9 @@ so the booking tests written against it still describe a real office.
 
 Fixture names are deliberately specific (`office`, `student`, `employee`)
 rather than generic, so nothing here shadows what another test file defines
-for itself.
+for itself. `client` is the exception, and on purpose: it replaces
+pytest-django's fixture of the same name with DRF's `APIClient`, a subclass of
+Django's test client that also speaks JSON (`format="json"`).
 
 It also holds the one hook every test file relies on: tests marked
 `@pytest.mark.postgres` are skipped unless the suite runs on PostgreSQL.
@@ -97,6 +100,12 @@ def authenticate(user):
         HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=user).key}"
     )
     return client
+
+
+@pytest.fixture
+def client():
+    """An anonymous API client, for the endpoints called before logging in."""
+    return APIClient()
 
 
 @pytest.fixture

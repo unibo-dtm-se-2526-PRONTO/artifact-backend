@@ -4,7 +4,8 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from rest_framework.test import APIClient
+
+from tests.conftest import PASSWORD, authenticate, make_user
 
 User = get_user_model()
 
@@ -12,29 +13,16 @@ LOGIN_URL = "/api/auth/login/"
 LOGOUT_URL = "/api/auth/logout/"
 ME_URL = "/api/auth/me/"
 
-PASSWORD = "s3cret-passphrase"
-
-
-@pytest.fixture
-def client():
-    return APIClient()
-
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(
-        email="mario.rossi@studio.unibo.it",
-        password=PASSWORD,
-        role=User.Role.STUDENT,
-        is_active=True,  # already verified: these tests are about logging in
-    )
+    # Already verified, as make_user makes them: these tests are about logging in.
+    return make_user("mario.rossi@studio.unibo.it", User.Role.STUDENT)
 
 
 @pytest.fixture
-def authenticated_client(client, user):
-    token = Token.objects.create(user=user)
-    client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
-    return client
+def authenticated_client(user):
+    return authenticate(user)
 
 
 @pytest.mark.django_db

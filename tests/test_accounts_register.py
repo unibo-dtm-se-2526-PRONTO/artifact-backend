@@ -3,23 +3,19 @@
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework import status
-from rest_framework.test import APIClient
+
+from tests.conftest import PASSWORD
 
 User = get_user_model()
 
 URL = "/api/auth/register/"
 
 
-@pytest.fixture
-def client():
-    return APIClient()
-
-
 @pytest.mark.django_db
 def test_student_email_domain_creates_a_student(client):
     response = client.post(
         URL,
-        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        {"email": "mario.rossi@studio.unibo.it", "password": PASSWORD},
         format="json",
     )
 
@@ -33,7 +29,7 @@ def test_student_email_domain_creates_a_student(client):
 def test_employee_email_domain_creates_an_employee(client):
     response = client.post(
         URL,
-        {"email": "anna.bianchi@unibo.it", "password": "s3cret-passphrase"},
+        {"email": "anna.bianchi@unibo.it", "password": PASSWORD},
         format="json",
     )
 
@@ -52,9 +48,7 @@ def test_employee_email_domain_creates_an_employee(client):
     ],
 )
 def test_other_email_domains_are_rejected(client, email):
-    response = client.post(
-        URL, {"email": email, "password": "s3cret-passphrase"}, format="json"
-    )
+    response = client.post(URL, {"email": email, "password": PASSWORD}, format="json")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert not User.objects.filter(email=email).exists()
@@ -66,7 +60,7 @@ def test_role_sent_by_the_client_is_ignored(client):
         URL,
         {
             "email": "mario.rossi@studio.unibo.it",
-            "password": "s3cret-passphrase",
+            "password": PASSWORD,
             "role": User.Role.EMPLOYEE,
         },
         format="json",
@@ -81,7 +75,7 @@ def test_role_sent_by_the_client_is_ignored(client):
 def test_password_is_never_returned(client):
     response = client.post(
         URL,
-        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        {"email": "mario.rossi@studio.unibo.it", "password": PASSWORD},
         format="json",
     )
 
@@ -100,7 +94,7 @@ def test_weak_password_is_rejected(client):
 
 @pytest.mark.django_db
 def test_duplicate_email_is_rejected(client):
-    payload = {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"}
+    payload = {"email": "mario.rossi@studio.unibo.it", "password": PASSWORD}
     client.post(URL, payload, format="json")
 
     response = client.post(URL, payload, format="json")
@@ -113,7 +107,7 @@ def test_duplicate_email_is_rejected(client):
 def test_registered_user_is_inactive_until_verified(client):
     client.post(
         URL,
-        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        {"email": "mario.rossi@studio.unibo.it", "password": PASSWORD},
         format="json",
     )
 
@@ -124,7 +118,7 @@ def test_registered_user_is_inactive_until_verified(client):
 def test_registration_sends_a_verification_email(client, mailoutbox):
     client.post(
         URL,
-        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        {"email": "mario.rossi@studio.unibo.it", "password": PASSWORD},
         format="json",
     )
 
@@ -136,7 +130,7 @@ def test_registration_sends_a_verification_email(client, mailoutbox):
 def test_email_is_normalised_to_lowercase(client):
     client.post(
         URL,
-        {"email": "Mario.Rossi@Studio.Unibo.it", "password": "s3cret-passphrase"},
+        {"email": "Mario.Rossi@Studio.Unibo.it", "password": PASSWORD},
         format="json",
     )
 
@@ -147,13 +141,13 @@ def test_email_is_normalised_to_lowercase(client):
 def test_the_same_address_cannot_be_registered_twice_in_a_different_case(client):
     client.post(
         URL,
-        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        {"email": "mario.rossi@studio.unibo.it", "password": PASSWORD},
         format="json",
     )
 
     response = client.post(
         URL,
-        {"email": "Mario.Rossi@Studio.Unibo.it", "password": "s3cret-passphrase"},
+        {"email": "Mario.Rossi@Studio.Unibo.it", "password": PASSWORD},
         format="json",
     )
 
@@ -182,7 +176,7 @@ def test_password_too_similar_to_the_email_is_rejected(client):
 def test_registration_does_not_require_authentication(client):
     response = client.post(
         URL,
-        {"email": "mario.rossi@studio.unibo.it", "password": "s3cret-passphrase"},
+        {"email": "mario.rossi@studio.unibo.it", "password": PASSWORD},
         format="json",
     )
 

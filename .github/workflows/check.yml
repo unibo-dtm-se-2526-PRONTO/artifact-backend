@@ -52,19 +52,9 @@ jobs:
 
       # on the default in-memory SQLite: the suite must keep passing with no
       # database server, as it does on a developer's machine
-      - name: Test with Coverage
+      - name: Test
         shell: bash
-        run: |
-          poetry run poe coverage
-          poetry run poe coverage-report
-          poetry run poe coverage-html
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report-${{ github.sha }}
-          path: htmlcov
-          if-no-files-found: ignore
-          overwrite: true
+        run: poetry run poe test
 
   test:
     needs: check
@@ -108,10 +98,22 @@ jobs:
       - name: Restore Development Environment
         run: poetry install
 
-      - name: Test
+      # Coverage is measured here rather than on SQLite: only this run reaches
+      # the FAQ matching, so only here does the report describe the whole code.
+      - name: Test with Coverage
         shell: bash
         # -rs lists the skipped tests: none should be skipped here
-        run: poetry run poe test -rs
+        run: |
+          poetry run poe coverage -rs
+          poetry run poe coverage-report
+          poetry run poe coverage-html
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report-${{ github.sha }}
+          path: htmlcov
+          if-no-files-found: ignore
+          overwrite: true
 
   deploy:
     name: Deploy

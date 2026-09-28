@@ -221,7 +221,7 @@ All tests live in `tests/`, never in an app's own `tests.py`. CI points at
 
 Two reference examples to copy from:
 - `tests/test_health.py` — endpoint test using DRF's `APIClient`
-- `tests/test_database.py` — database test using the `@pytest.mark.django_db`
+- `tests/test_faq_models.py` — database tests using the `@pytest.mark.django_db`
   marker, which gives each test a clean, isolated database
 
 `tests/conftest.py` holds the fixtures the booking test files share — two

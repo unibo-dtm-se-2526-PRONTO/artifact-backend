@@ -182,3 +182,34 @@ def test_me_gives_an_employee_no_student_data(db):
         "matricola": "",
         "degree_programme": "",
     }
+
+
+@pytest.mark.django_db
+def test_no_endpoint_ever_returns_the_password_or_its_hash(client):
+    # NFR3, across the whole sign-up flow: neither the password the user typed
+    # nor the hash stored in its place appears in any response body.
+    register = client.post(
+        "/api/auth/register/",
+        {
+            "email": "anna.bianchi@unibo.it",
+            "password": PASSWORD,
+            "first_name": "Anna",
+            "last_name": "Bianchi",
+        },
+        format="json",
+    )
+    user = User.objects.get()
+    user.is_active = True
+    user.save()
+    login = client.post(
+        LOGIN_URL, {"email": user.email, "password": PASSWORD}, format="json"
+    )
+    client.credentials(HTTP_AUTHORIZATION=f"Token {login.json()['token']}")
+    me = client.get(ME_URL)
+
+    for response in (register, login, me):
+        assert response.status_code < 300
+        body = response.content.decode()
+        assert PASSWORD not in body
+        assert user.password not in body
+        assert "password" not in response.json()

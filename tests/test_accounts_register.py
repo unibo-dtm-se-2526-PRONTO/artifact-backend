@@ -2,6 +2,7 @@
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import get_hasher, identify_hasher
 from rest_framework import status
 
 from tests.conftest import PASSWORD
@@ -348,3 +349,40 @@ def test_an_employee_is_registered_without_student_data(client):
     assert response.status_code == status.HTTP_201_CREATED
     user = User.objects.get()
     assert (user.matricola, user.degree_programme) == ("", "")
+
+
+# Passwords (NFR3)
+
+
+@pytest.mark.django_db
+def test_the_password_is_stored_hashed(client):
+    client.post(URL, STUDENT, format="json")
+
+    stored = User.objects.get().password
+    assert PASSWORD not in stored
+    # A salted hash in the format of the configured hasher, not the password
+    # under another name.
+    assert identify_hasher(stored).algorithm == get_hasher().algorithm
+    assert User.objects.get().check_password(PASSWORD)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "password, reason",
+    [
+        ("Xk9#q2", "too short"),
+        ("password1", "too common"),
+        ("83920174650", "entirely numeric"),
+        ("rossi1998", "too similar to the last name"),
+    ],
+    ids=["minimum-length", "common", "numeric", "similar-to-a-name"],
+)
+def test_every_configured_password_validator_is_enforced(client, password, reason):
+    # One case per validator in AUTH_PASSWORD_VALIDATORS. The last one only
+    # works because the password is checked against the whole candidate user,
+    # names included.
+    response = client.post(URL, {**STUDENT, "password": password}, format="json")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert any(reason in message for message in response.json()["password"])
+    assert not User.objects.exists()

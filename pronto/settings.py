@@ -250,3 +250,16 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# FAQ matching (faq/matching.py)
+# The lowest full-text rank at which a FAQ is suggested as the answer to a
+# question. A word of the question found in a FAQ's question counts about 0.6,
+# one found only in its answer about 0.25, and the rank is the average over the
+# meaningful words of the question. On the examples in tests/test_faq_matching.py, questions a FAQ
+# does answer score 0.15 to 0.65, even when padded with "vorrei sapere se...";
+# one that shares a single word with an answer (the "online" of "Studenti
+# Online") scores 0.04. 0.1 sits in the gap, closer to the noise, because
+# suggesting a wrong answer costs a click while missing a right one costs a
+# phone call or an appointment.
+FAQ_MATCH_MIN_RANK = 0.1

@@ -8,7 +8,8 @@ license = "Apache 2.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-# update the Python versions in .github/workflows/check.yml if you change this
+# CI and the Dockerfile run on Python 3.12: update .github/workflows/check.yml
+# and the Dockerfile together if that changes
 python = ">= 3.10.0 < 4.0.0"
 django = "^5.2"
 python-dotenv = "^1.0.1"

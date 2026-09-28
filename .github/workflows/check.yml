@@ -23,6 +23,12 @@ jobs:
         with:
           fetch-depth: 0 # all history
 
+      # the Python of the Dockerfile, which is what the backend runs on
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
       - name: Install Poetry
         # the version pinned in the Dockerfile, the only place it is written
         run: |
@@ -44,6 +50,8 @@ jobs:
         shell: bash
         run: poetry run poe format-check
 
+      # on the default in-memory SQLite: the suite must keep passing with no
+      # database server, as it does on a developer's machine
       - name: Test with Coverage
         shell: bash
         run: |
@@ -60,29 +68,36 @@ jobs:
 
   test:
     needs: check
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
-        python-version:
-          - '3.10'
-          - '3.11'
-          - '3.12'
-          - '3.13'
-    runs-on: ${{ matrix.os }}
-    name: Test on Python ${{ matrix.python-version }}, on ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    name: Test on PostgreSQL
     timeout-minutes: 45
+    services:
+      # the same image as the db service of docker-compose.yml
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pronto
+          POSTGRES_USER: pronto
+          POSTGRES_PASSWORD: pronto
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pronto -d pronto"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      # read by pronto/settings.py: run the suite on the service above, so the
+      # tests marked `postgres` run here instead of being skipped
+      TEST_DATABASE_URL: postgres://pronto:pronto@localhost:5432/pronto?sslmode=disable
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Checkout Code
-        uses: actions/checkout@v6
+          python-version: '3.12'
 
       - name: Install Poetry
         # the version pinned in the Dockerfile, the only place it is written
@@ -95,11 +110,12 @@ jobs:
 
       - name: Test
         shell: bash
-        run: poetry run poe test
+        # -rs lists the skipped tests: none should be skipped here
+        run: poetry run poe test -rs
 
   deploy:
     name: Deploy
-    permissions: 
+    permissions:
       contents: write
       packages: write
     needs:

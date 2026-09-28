@@ -37,8 +37,14 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "password", "role"]
+        fields = ["id", "email", "password", "role", "first_name", "last_name"]
         read_only_fields = ["id", "role"]
+        # Blank-able on the model, for the accounts that predate them, but
+        # mandatory for anyone signing up.
+        extra_kwargs = {
+            "first_name": {"required": True, "allow_blank": False},
+            "last_name": {"required": True, "allow_blank": False},
+        }
 
     def validate_email(self, value):
         domain = value.rsplit("@", 1)[-1]
@@ -49,20 +55,30 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        # Only reached once every field is valid, so the email is known to be
+        # institutional and the role can be derived here, where the checks
+        # that depend on it run.
+        attrs["role"] = ROLE_BY_EMAIL_DOMAIN[attrs["email"].rsplit("@", 1)[-1]]
+        profile = {key: value for key, value in attrs.items() if key != "password"}
+        candidate = User(**profile)
+        errors = {}
+        try:
+            candidate.clean()
+        except DjangoValidationError as error:
+            errors.update(error.message_dict)
         # Validated here rather than as a field validator: the similarity check
-        # needs the user the password belongs to, which a field validator lacks.
-        candidate = User(email=attrs.get("email", ""))
+        # needs the user the password belongs to — their email and names —
+        # which a field validator lacks.
         try:
             validate_password(attrs["password"], user=candidate)
         except DjangoValidationError as error:
-            raise serializers.ValidationError({"password": list(error.messages)})
+            errors["password"] = list(error.messages)
+        if errors:
+            raise serializers.ValidationError(errors)
         return attrs
 
     def create(self, validated_data):
-        domain = validated_data["email"].rsplit("@", 1)[-1]
-        return User.objects.create_user(
-            role=ROLE_BY_EMAIL_DOMAIN[domain], **validated_data
-        )
+        return User.objects.create_user(**validated_data)
 
 
 class LoginSerializer(serializers.Serializer):
@@ -87,5 +103,5 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "role"]
+        fields = ["id", "email", "role", "first_name", "last_name"]
         read_only_fields = fields

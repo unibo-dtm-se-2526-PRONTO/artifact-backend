@@ -17,7 +17,12 @@ ME_URL = "/api/auth/me/"
 @pytest.fixture
 def user(db):
     # Already verified, as make_user makes them: these tests are about logging in.
-    return make_user("mario.rossi@studio.unibo.it", User.Role.STUDENT)
+    return make_user(
+        "mario.rossi@studio.unibo.it",
+        User.Role.STUDENT,
+        first_name="Mario",
+        last_name="Rossi",
+    )
 
 
 @pytest.fixture
@@ -132,6 +137,8 @@ def test_me_returns_the_authenticated_user(authenticated_client, user):
         "id": user.id,
         "email": user.email,
         "role": User.Role.STUDENT,
+        "first_name": "Mario",
+        "last_name": "Rossi",
     }
 
 

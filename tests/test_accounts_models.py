@@ -2,6 +2,7 @@
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 
 from tests.conftest import PASSWORD
@@ -89,3 +90,18 @@ def test_email_must_be_unique():
             password="another-passphrase",
             role=User.Role.STUDENT,
         )
+
+
+@pytest.mark.parametrize("role", ["STUDENT", "EMPLOYEE"])
+def test_students_and_employees_need_a_first_and_last_name(role):
+    user = User(email="someone@unibo.it", role=role)
+
+    with pytest.raises(ValidationError) as error:
+        user.clean()
+
+    assert {"first_name", "last_name"} <= set(error.value.message_dict)
+
+
+def test_an_admin_needs_no_name():
+    # createsuperuser asks for nothing but the email and the password.
+    User(email="admin@unibo.it", role=User.Role.ADMIN).clean()

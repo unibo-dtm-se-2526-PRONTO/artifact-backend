@@ -72,7 +72,12 @@ def test_a_link_for_an_unknown_user_is_rejected(client, user):
 def test_the_link_from_the_registration_email_works(client, mailoutbox):
     client.post(
         REGISTER_URL,
-        {"email": "anna.bianchi@unibo.it", "password": PASSWORD},
+        {
+            "email": "anna.bianchi@unibo.it",
+            "password": PASSWORD,
+            "first_name": "Anna",
+            "last_name": "Bianchi",
+        },
         format="json",
     )
     link = next(

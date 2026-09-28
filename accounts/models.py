@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from pronto.enums import Role
@@ -69,3 +70,20 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+    def clean(self):
+        """Check the personal data a user of this role has to give.
+
+        In ``clean()`` rather than on the fields: what is required depends on
+        the role, and an admin, created from the command line, has none of it.
+        The columns stay blank-able so the accounts that predate them are still
+        valid rows; this is what registration and the admin forms enforce.
+        """
+        super().clean()
+        errors = {}
+        if self.role in (Role.STUDENT, Role.EMPLOYEE):
+            for field in ("first_name", "last_name"):
+                if not getattr(self, field).strip():
+                    errors[field] = "This field is required."
+        if errors:
+            raise ValidationError(errors)

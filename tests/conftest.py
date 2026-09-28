@@ -70,9 +70,10 @@ def slot_at(day, hour, minute=0):
     return timezone.make_aware(datetime.combine(day, time(hour, minute)))
 
 
-def make_user(email, role):
+def make_user(email, role, **fields):
+    """An active user; `fields` sets anything else, such as the names."""
     return User.objects.create_user(
-        email=email, password=PASSWORD, role=role, is_active=True
+        email=email, password=PASSWORD, role=role, is_active=True, **fields
     )
 
 

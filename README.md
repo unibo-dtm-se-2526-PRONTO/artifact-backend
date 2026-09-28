@@ -208,10 +208,11 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 | Method | Path                                    | Auth    | Description                                      |
 |--------|-----------------------------------------|---------|--------------------------------------------------|
 | GET    | `/api/health/`                          | public  | Health check, returns `{"status": "ok"}`         |
-| POST   | `/api/auth/register/`                   | public  | Create an account; `role` is derived from the email domain |
+| POST   | `/api/auth/register/`                   | public  | Create an account, inactive until verified; `role` is derived from the email domain. Payload in [Accounts](#accounts) |
+| GET    | `/api/auth/verify/<uidb64>/<token>/`    | public  | The link e-mailed at registration; activates the account |
 | POST   | `/api/auth/login/`                      | public  | Exchange email and password for a token          |
 | POST   | `/api/auth/logout/`                     | token   | Delete the caller's token                        |
-| GET    | `/api/auth/me/`                         | token   | The authenticated user's own data                |
+| GET    | `/api/auth/me/`                         | token   | The authenticated user's own data, same shape as the registration response |
 | GET    | `/api/faqs/`                            | public  | Published FAQs; filter with `?office=<code>`     |
 | GET    | `/api/faqs/<id>/`                       | public  | A single published FAQ                           |
 | POST   | `/api/questions/`                       | student | Ask about an office: `{"office": "<code>", "question": "<text>"}`; returns the best-matching FAQ, if any. `?lang` is the language of the question |
@@ -434,3 +435,83 @@ and cannot be chosen by the client:
 | `@unibo.it`         | `EMPLOYEE` |
 
 Any other domain is rejected with `400`.
+
+### Personal data
+
+Registration asks for different data depending on the role the email domain
+grants (FR1, FR2). The rules live in `User.clean()`, so the API and the admin
+forms apply the same ones; `RegisterSerializer` derives the role first and
+then runs them.
+
+| Field | Student | Employee |
+|-------|---------|----------|
+| `first_name`, `last_name` | required | required |
+| `matricola` | required, unique | refused |
+| `degree_programme` | required, up to 200 characters | refused |
+
+- **Matricola**: digits only, 6 to 10 of them. Current Unibo matricole have
+  ten digits, zero-padded (`0001012345`); older ones are shorter. It is stored
+  as text, exactly as given: leading zeros are kept and nothing is padded, so
+  `123456` and `0000123456` are two different values. Unique among students.
+- **Degree programme** (corso di studi): free text. There is no list of
+  degree programmes in the project to validate it against.
+- **Employees** sending a non-empty `matricola` or `degree_programme` get a
+  `400` naming the field, rather than having it silently dropped: an employee
+  sending a matricola has most likely typed the wrong address. Empty strings
+  are accepted. The employee's office is not part of registration: it is
+  chosen afterwards through `POST /api/employee-profile/` (see
+  [Shifts](#shifts)).
+- **Admins**, created with `createsuperuser`, need none of this.
+
+The columns are blank-able in the database, with `""` as the default, so the
+accounts created before they existed are still valid rows; the admin asks for
+the missing data the next time such an account is edited.
+
+`POST /api/auth/register/`, a student:
+
+```json
+{
+  "email": "mario.rossi@studio.unibo.it",
+  "password": "…",
+  "first_name": "Mario",
+  "last_name": "Rossi",
+  "matricola": "0001012345",
+  "degree_programme": "Ingegneria e scienze informatiche"
+}
+```
+
+An employee sends the same without `matricola` and `degree_programme`. The
+`201` response, and `GET /api/auth/me/`, return the account without the
+password:
+
+```json
+{
+  "id": 7,
+  "email": "mario.rossi@studio.unibo.it",
+  "role": "STUDENT",
+  "first_name": "Mario",
+  "last_name": "Rossi",
+  "matricola": "0001012345",
+  "degree_programme": "Ingegneria e scienze informatiche"
+}
+```
+
+For an employee, `matricola` and `degree_programme` are `""`. A validation
+error is a `400` keyed by field, e.g. `{"matricola": ["A matricola is a number
+of 6 to 10 digits."]}`.
+
+### Passwords and tokens
+
+- Passwords are stored only as salted hashes, by Django's default hasher
+  (PBKDF2), through `set_password`. No serializer has a readable `password`
+  field, and `tests/test_accounts_auth.py` checks that neither the password
+  nor its hash appears in any response of the sign-up flow.
+- Registration runs every validator in `AUTH_PASSWORD_VALIDATORS` — minimum
+  length, common passwords, entirely numeric passwords, and similarity to the
+  email and the names — against the candidate user.
+- Sessions use DRF's `TokenAuthentication`: `POST /api/auth/login/` returns a
+  random 40-character key, stored server-side in `authtoken_token`, one per
+  user. The key is not signed and does not expire; it stops working only when
+  the user logs out, which deletes it. Only the e-mail verification link is a
+  signed token with a lifetime (Django's `default_token_generator`, valid for
+  `PASSWORD_RESET_TIMEOUT`, three days by default).

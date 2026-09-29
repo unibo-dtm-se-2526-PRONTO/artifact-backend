@@ -1,9 +1,44 @@
 services:
+  # A local PostgreSQL, for running the backend and the test suite against the
+  # same database engine as production. The credentials are for this machine
+  # only: the container is reachable from localhost and nowhere else.
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pronto
+      POSTGRES_USER: pronto
+      POSTGRES_PASSWORD: pronto
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pronto -d pronto"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
   backend:
     build: .
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - path: .env
+        required: false
+    # These win over .env, so the backend in compose always talks to the db
+    # container above, whatever database .env points a local run at.
+    environment:
+      DB_NAME: pronto
+      DB_USER: pronto
+      DB_PASSWORD: pronto
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_SSLMODE: disable
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - .:/app
+
+volumes:
+  pgdata:

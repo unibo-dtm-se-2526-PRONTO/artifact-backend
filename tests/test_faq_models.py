@@ -1,5 +1,7 @@
 """Tests for the FAQ model."""
 
+from datetime import timedelta
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -57,7 +59,14 @@ def test_creation_and_update_timestamps_are_set_automatically():
 def test_updating_a_faq_moves_the_updated_timestamp_forward():
     stored = faq()
     stored.save()
-    first_update = stored.updated_at
+    # Two saves in a row can read the same clock tick — on Windows the clock
+    # is coarse enough that they often do — and the timestamp would then stay
+    # put. Moving the first one back an hour makes "forward" observable
+    # whatever the clock's resolution. `update()` skips auto_now, so the value
+    # written is the one given.
+    first_update = stored.updated_at - timedelta(hours=1)
+    Faq.objects.filter(pk=stored.pk).update(updated_at=first_update)
+    stored.refresh_from_db()
 
     stored.answer_it = "Dalla sezione Esami, almeno cinque giorni prima."
     stored.save()

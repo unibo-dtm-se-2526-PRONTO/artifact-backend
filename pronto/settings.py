@@ -13,7 +13,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 import sys
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -152,18 +154,53 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
         "PORT": os.getenv("DB_PORT", "5432"),
-        "OPTIONS": {"sslmode": "require"},
+        # The hosted database only accepts encrypted connections, hence the
+        # default. The PostgreSQL in docker-compose.yml has no certificate and
+        # sets DB_SSLMODE=disable.
+        "OPTIONS": {"sslmode": os.getenv("DB_SSLMODE", "require")},
     }
 }
 
-# Tests run against an in-memory SQLite database: no credentials, no network,
-# so the suite is fast locally and works on CI, where .env is not available.
-# Development and production keep using the PostgreSQL settings above.
-if "PYTEST_VERSION" in os.environ or "test" in sys.argv:
-    DATABASES["default"] = {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+
+def postgres_from_url(url):
+    """Django database settings for a postgres://user:password@host:port/name URL.
+
+    One variable rather than a TEST_DB_* copy of every DB_* key, so a test run
+    never picks up the development credentials from .env by accident. The
+    query string may carry `sslmode`; without it libpq tries SSL and falls back
+    to a plain connection, which suits both a local container and CI.
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in {"postgres", "postgresql"}:
+        raise ImproperlyConfigured(
+            f"TEST_DATABASE_URL must be a postgres:// URL, not {parts.scheme}://"
+        )
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": unquote(parts.path.lstrip("/")),
+        "USER": unquote(parts.username or ""),
+        "PASSWORD": unquote(parts.password or ""),
+        "HOST": parts.hostname or "",
+        "PORT": str(parts.port or 5432),
+        "OPTIONS": {"sslmode": parse_qs(parts.query).get("sslmode", ["prefer"])[0]},
     }
+
+
+# Tests run against an in-memory SQLite database by default: no credentials, no
+# network, so the suite is fast and needs nothing but Python. SQLite is not
+# PostgreSQL, though — no full-text search, no real row locking — so setting
+# TEST_DATABASE_URL runs the same suite against a PostgreSQL server instead,
+# as CI does. Django creates and drops its own test_<name> database there.
+# Development and production keep using the DB_* settings above.
+if "PYTEST_VERSION" in os.environ or "test" in sys.argv:
+    test_database_url = os.getenv("TEST_DATABASE_URL")
+    if test_database_url:
+        DATABASES["default"] = postgres_from_url(test_database_url)
+    else:
+        DATABASES["default"] = {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
     # CI has no .env file, so no SECRET_KEY. Outside tests a missing SECRET_KEY
     # must still be a hard error, so this fallback stays scoped to test runs.
     SECRET_KEY = SECRET_KEY or "django-insecure-key-for-tests-only"

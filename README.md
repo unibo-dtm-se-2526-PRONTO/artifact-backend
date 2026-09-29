@@ -421,6 +421,71 @@ only finds the best candidate among a set of FAQs, with its own score and
 threshold, while `find_best_match` applies the office-first policy on top. A
 vector matcher would implement the same `Matcher` protocol and be passed in.
 
+### Importing FAQs
+
+The knowledge base is seeded from the helpdesk's spreadsheet, with columns
+`Ufficio | Office | Domanda | Question | Risposta`:
+
+```bash
+poetry run python manage.py import_faqs path/to/export.xlsx [--sheet NAME] [--publish]
+```
+
+The export holds real personal data: keep it out of the repository (`*.xlsx`
+is git-ignored) and delete it once imported. The command, covered by
+`tests/test_faq_import.py`:
+
+- maps the office by its Italian name, then its English one, to `OfficeCode`.
+  Rows with an unknown office, no question, no answer, or a question longer
+  than 255 characters are skipped and counted by reason, never fatal
+- anonymises every question and answer, in both languages, before storing it
+- fills the English answer, which the sheet does not have, with the Italian
+  one, so English readers get an answer rather than an empty page; a missing
+  English question falls back to the Italian one the same way. Translations
+  are done in the admin
+- creates FAQs **unpublished**: the text is about to go on a public endpoint
+  and name detection is heuristic, so someone reads it in the admin first.
+  `--publish` skips that review
+- is idempotent: `(office_code, question_it)` is the natural key, so a re-run
+  updates the FAQs it finds instead of duplicating them. The Italian answer and
+  the English question follow the sheet; an English answer is replaced only
+  while it is still the untranslated copy; publication is never touched
+- runs in one transaction, and prints how many FAQs were created, updated,
+  left unchanged and skipped
+
+Most rows of the current export have no answer yet, so they are skipped: fill
+the `Risposta` column and run the command again.
+
+### Anonymisation
+
+NFR4 requires the requester to be unidentifiable. `faq/anonymisation.py`
+replaces, covered by `tests/test_faq_anonymisation.py`:
+
+| What | Recognised as | Placeholder |
+|------|---------------|-------------|
+| e-mail addresses | any address, except the institutional `@unibo.it` | `[EMAIL]` |
+| phone numbers | Italian mobiles and landlines, with or without `+39`/`0039`, grouped by spaces, dots or dashes; any `+`-prefixed international number | `[PHONE]` |
+| student IDs | a ten-digit Unibo matricola (`00…`), or 5–10 digits after `matricola`, `matr.`, `student ID`… | `[STUDENT_ID]` |
+| tax codes | the codice fiscale format | `[TAX_CODE]` |
+| names | capitalised words after an honorific (`Prof.`, `dott.ssa`, `Sig.ra`, `Mr`…), a self-introduction (`mi chiamo`, `my name is`; `sono` / `I am` only with first and last name), or a sign-off closing the text (`Grazie, Mario Rossi`) | `[NAME]` |
+
+Institutional contacts: `@unibo.it` addresses are kept because students write
+from `@studio.unibo.it`, so such an address is the university's — usually the
+office an answer points to — and never the requester's. Phone numbers get no
+exception: a student's and an office's look alike, and office numbers are
+published elsewhere. Links are left whole.
+
+The limits, which is why imports are unpublished by default:
+
+- names are found only after a cue. A bare "Mario Rossi" mid-sentence, a lone
+  first name after `sono`, or a lowercase name is missed; a bare capitalised
+  pair is not treated as a name because in this data it is almost always a
+  degree course ("Ingegneria Biomedica")
+- the cues can over-match: "I am Computer Engineering…" loses the course name.
+  `Ing.` is not a cue, since here it abbreviates "Ingegneria"
+- matricole shorter than ten digits without a cue, addresses, and other
+  indirect details (a rare combination of course and hometown) are not
+  recognised
+
 ## Accounts
 
 The user model is `accounts.User`; always reference it as

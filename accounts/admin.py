@@ -1,16 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import AdminUserCreationForm
 
 from .models import User
 
 
-class UserCreationFormWithoutUsername(UserCreationForm):
-    """Django's own creation form, retargeted at email as the credential."""
+class UserCreationFormWithoutUsername(AdminUserCreationForm):
+    """Django's own admin creation form, retargeted at email as the credential.
 
-    class Meta(UserCreationForm.Meta):
+    The admin one, not ``UserCreationForm``: only it declares the
+    ``usable_password`` field that ``add_fieldsets`` lists, and with the plain
+    form the add page fails with a ``FieldError`` before it renders.
+    """
+
+    class Meta(AdminUserCreationForm.Meta):
         model = User
-        fields = ("email", "role")
+        fields = (
+            "email",
+            "role",
+            "first_name",
+            "last_name",
+            "matricola",
+            "degree_programme",
+        )
 
 
 @admin.register(User)
@@ -21,14 +33,17 @@ class UserAdmin(DjangoUserAdmin):
 
     add_form = UserCreationFormWithoutUsername
 
-    list_display = ["email", "role", "is_active", "is_staff"]
+    list_display = ["email", "last_name", "first_name", "role", "is_active", "is_staff"]
     list_filter = ["role", "is_active", "is_staff"]
-    search_fields = ["email"]
+    search_fields = ["email", "last_name", "first_name", "matricola"]
     ordering = ["email"]
 
     fieldsets = [
         (None, {"fields": ("email", "password")}),
-        ("Anagrafica", {"fields": ("first_name", "last_name")}),
+        (
+            "Anagrafica",
+            {"fields": ("first_name", "last_name", "matricola", "degree_programme")},
+        ),
         (
             "Ruolo e permessi",
             {
@@ -52,6 +67,10 @@ class UserAdmin(DjangoUserAdmin):
                 "fields": (
                     "email",
                     "role",
+                    "first_name",
+                    "last_name",
+                    "matricola",
+                    "degree_programme",
                     "usable_password",
                     "password1",
                     "password2",

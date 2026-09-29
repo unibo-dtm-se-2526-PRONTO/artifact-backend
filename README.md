@@ -123,12 +123,15 @@ Two reference examples to copy from:
 - `tests/test_faq_models.py` — database tests using the `@pytest.mark.django_db`
   marker, which gives each test a clean, isolated database
 
-`tests/conftest.py` holds the fixtures the booking test files share — two
-offices, their staff, a student, their authenticated clients, and a `day` that
-is always a Monday in the future. Every employee it makes works Monday to
-Friday, 9 to 17, unless a test passes other `shifts` to `make_employee`. Fixtures stay local to a file while one file
-owns them, as the accounts tests do; they move to `conftest.py` once a second
-file needs the same cast.
+`tests/conftest.py` holds what more than one test file needs. For the booking
+tests, two offices, their staff, a student, their authenticated clients, and a
+`day` that is always a Monday in the future; every employee it makes works
+Monday to Friday, 9 to 17, unless a test passes other `shifts` to
+`make_employee`. For the accounts and FAQ tests, an anonymous `client` (DRF's
+`APIClient`, replacing pytest-django's fixture of the same name), the
+`PASSWORD` every test user is given, and `authenticate(user)`, which returns a
+client carrying that user's token. Fixtures stay local to a file while one file
+owns them; they move to `conftest.py` once a second file needs them.
 
 ## Continuous integration
 
@@ -137,11 +140,13 @@ file needs the same cast.
 the backend runs on in production:
 
 1. **Preliminary Checks** — `poe compile`, `poe static-checks`,
-   `poe format-check`, then the suite with coverage on SQLite. The HTML
-   coverage report is uploaded as a build artifact.
-2. **Test on PostgreSQL** — the suite again, against a `postgres:16` service
-   container with the same credentials as the compose `db`, selected through
-   `TEST_DATABASE_URL`. This is where the `postgres` tests run.
+   `poe format-check`, then the suite on SQLite.
+2. **Test on PostgreSQL** — the suite again, with coverage, against a
+   `postgres:16` service container with the same credentials as the compose
+   `db`, selected through `TEST_DATABASE_URL`. This is where the `postgres`
+   tests run, and so the only run that reaches the FAQ matching: coverage is
+   measured here for that reason. The HTML report is uploaded as a build
+   artifact.
 3. **Deploy** — semantic-release, which only releases from `master` (see
    below).
 
@@ -203,12 +208,15 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 | Method | Path                                    | Auth    | Description                                      |
 |--------|-----------------------------------------|---------|--------------------------------------------------|
 | GET    | `/api/health/`                          | public  | Health check, returns `{"status": "ok"}`         |
-| POST   | `/api/auth/register/`                   | public  | Create an account; `role` is derived from the email domain |
+| POST   | `/api/auth/register/`                   | public  | Create an account, inactive until verified; `role` is derived from the email domain. Payload in [Accounts](#accounts) |
+| GET    | `/api/auth/verify/<uidb64>/<token>/`    | public  | The link e-mailed at registration; activates the account |
 | POST   | `/api/auth/login/`                      | public  | Exchange email and password for a token          |
 | POST   | `/api/auth/logout/`                     | token   | Delete the caller's token                        |
-| GET    | `/api/auth/me/`                         | token   | The authenticated user's own data                |
+| GET    | `/api/auth/me/`                         | token   | The authenticated user's own data, same shape as the registration response |
 | GET    | `/api/faqs/`                            | public  | Published FAQs; filter with `?office=<code>`     |
 | GET    | `/api/faqs/<id>/`                       | public  | A single published FAQ                           |
+| POST   | `/api/questions/`                       | student | Ask about an office: `{"office": "<code>", "question": "<text>"}`; returns the best-matching FAQ, if any. `?lang` is the language of the question |
+| POST   | `/api/questions/<uuid>/resolve/`        | student | The suggested FAQ answered the question; `400` if none was suggested |
 | GET    | `/api/offices/`                         | token   | The offices currently taking bookings            |
 | GET    | `/api/offices/<code>/availability/`     | token   | Free slots on `?date=YYYY-MM-DD` (required)      |
 | GET    | `/api/appointments/`                    | token   | The caller's own appointments                    |
@@ -223,7 +231,9 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 
 Every endpoint that returns stored text accepts `?lang=it|en` (`it` by
 default) and answers with neutral keys — `name`, `question`, `answer` — instead
-of exposing the `_it` / `_en` columns. An unsupported code is a `400`.
+of exposing the `_it` / `_en` columns. An unsupported code is a `400`. The
+questions endpoints are the one twist: there `lang` is the language the
+question is written in, and an inquiry is always read back in that language.
 
 ## Booking
 
@@ -263,7 +273,9 @@ A student sees only their own appointments, an employee only those assigned to
 them, an admin all of them. Asking for someone else's appointment returns
 `404`, not `403`: whether it exists is not the caller's business. Completing
 is the one action scoping alone does not protect — a student reaches their own
-appointment legitimately — so `IsEmployee` guards it explicitly.
+appointment legitimately — so `IsEmployee` guards it explicitly. `IsStudent`
+and `IsEmployee` live in `pronto/permissions.py`, because `faq` needs
+`IsStudent` too and cannot import from `booking`.
 
 ### Shifts
 
@@ -321,6 +333,93 @@ is not exposed over HTTP at all — FAQs are maintained in the Django admin.
 key to `booking.Office`: the two slices share the `OfficeCode` enum in
 `pronto/enums.py` and nothing else, so neither has to migrate or deploy with
 the other.
+
+### Asking a question
+
+Before booking, a student picks an office and writes their question
+(`POST /api/questions/?lang=it|en`). The answer, `201`:
+
+```json
+{
+  "id": "5b0e6a0e-3f0c-4d7e-9d3a-0c5e8f1b2a47",
+  "office": "ADMIN_OFFICE",
+  "language": "it",
+  "match": {
+    "faq": {"id": 3, "question": "Come attivo un tirocinio?", "answer": "..."},
+    "office": "INTERNSHIPS",
+    "score": 0.61
+  },
+  "office_reassigned": true,
+  "resolved": false
+}
+```
+
+`match` is `null` when no FAQ is relevant enough. `office` is the office the
+student asked; `match.office` the one the answer belongs to, and
+`office_reassigned` says they differ, so the client can offer to book with the
+right office. If the answer helps, the client calls
+`POST /api/questions/<id>/resolve/` and the flow ends there; if not, it books
+through `POST /api/appointments/` as usual, passing `match.faq.id` as `faq_id`.
+Resolving an inquiry that is already resolved answers `200` again, so a retry
+is harmless; one with no suggested FAQ is a `400`. Both endpoints return the
+same shape, with texts in the language the question was asked in. Only
+students ask and resolve.
+
+Each question is stored as a `faq.Inquiry`, to see what students need that the
+FAQs do not cover. It records the office, the text, the language, the FAQ
+suggested and its score, and whether it resolved the question — and on purpose
+nothing else:
+
+- **no user**: what was asked is what the knowledge base needs, not who asked
+  it, so the questions stay anonymous from the start;
+- **no appointment**: when the answer does not help, the appointment records
+  the FAQ that was shown (`suggested_faq`), so `booking` depends on `faq` and
+  never the other way round;
+- **a UUID primary key**: the id is handed to the client to resolve the
+  question later, and with no user to scope by, an id nobody can guess or
+  count is what keeps one student from closing another's question.
+
+The inquiries are listed, read-only, in the admin.
+
+### FAQ matching
+
+The matching lives in `faq/matching.py`; `faq/services.py` stores the result.
+It is PostgreSQL full-text search, from `django.contrib.postgres.search`:
+
+- only published FAQs are searched, in the language of the question: its
+  question and answer columns, with the `italian` or `english` text search
+  configuration, which does the stemming (`certificati` finds `certificato`)
+  and drops the stop words (`come`, `il`, `dove`, ...);
+- the FAQ's question is weighted `A` and its answer `B`, so a word the FAQ is
+  about counts more than one its answer mentions;
+- the words of the question are OR-ed (a `websearch` query): a student writes
+  a sentence, and requiring every word of it would match almost nothing.
+  `ts_rank` averages over the words of the question, so a FAQ scores by how
+  much of the question it covers, and short and long questions are comparable;
+- a FAQ is suggested only if its score reaches `FAQ_MATCH_MIN_RANK`, `0.1` by
+  default, in `pronto/settings.py`. On the examples in
+  `tests/test_faq_matching.py`, questions a FAQ answers score 0.15 to 0.65,
+  while one that only shares a word with an answer (the "online" of "Studenti
+  Online") scores 0.04. The comment on the setting explains the choice;
+- the office the student chose is searched first. Only if nothing there
+  reaches the threshold are all offices searched, and the best of those is
+  returned with its own office.
+
+The vectors are computed at query time, with no stored column and no GIN
+index: the knowledge base is a few hundred rows at most, where an index would
+not pay for itself. That is the first thing to revisit if it grows by orders
+of magnitude.
+
+The search only exists on PostgreSQL. On any other database the service raises
+`MatchingUnavailable` instead of reporting "no match", which would look exactly
+like a knowledge base with no answer; the tests that reach it are marked
+`postgres`.
+
+Semantic search over embeddings (Chroma, IR4) is a planned extension and is
+not implemented. The service is split for it: a matcher (`FullTextMatcher`)
+only finds the best candidate among a set of FAQs, with its own score and
+threshold, while `find_best_match` applies the office-first policy on top. A
+vector matcher would implement the same `Matcher` protocol and be passed in.
 
 ### Importing FAQs
 
@@ -401,3 +500,83 @@ and cannot be chosen by the client:
 | `@unibo.it`         | `EMPLOYEE` |
 
 Any other domain is rejected with `400`.
+
+### Personal data
+
+Registration asks for different data depending on the role the email domain
+grants (FR1, FR2). The rules live in `User.clean()`, so the API and the admin
+forms apply the same ones; `RegisterSerializer` derives the role first and
+then runs them.
+
+| Field | Student | Employee |
+|-------|---------|----------|
+| `first_name`, `last_name` | required | required |
+| `matricola` | required, unique | refused |
+| `degree_programme` | required, up to 200 characters | refused |
+
+- **Matricola**: digits only, 6 to 10 of them. Current Unibo matricole have
+  ten digits, zero-padded (`0001012345`); older ones are shorter. It is stored
+  as text, exactly as given: leading zeros are kept and nothing is padded, so
+  `123456` and `0000123456` are two different values. Unique among students.
+- **Degree programme** (corso di studi): free text. There is no list of
+  degree programmes in the project to validate it against.
+- **Employees** sending a non-empty `matricola` or `degree_programme` get a
+  `400` naming the field, rather than having it silently dropped: an employee
+  sending a matricola has most likely typed the wrong address. Empty strings
+  are accepted. The employee's office is not part of registration: it is
+  chosen afterwards through `POST /api/employee-profile/` (see
+  [Shifts](#shifts)).
+- **Admins**, created with `createsuperuser`, need none of this.
+
+The columns are blank-able in the database, with `""` as the default, so the
+accounts created before they existed are still valid rows; the admin asks for
+the missing data the next time such an account is edited.
+
+`POST /api/auth/register/`, a student:
+
+```json
+{
+  "email": "mario.rossi@studio.unibo.it",
+  "password": "…",
+  "first_name": "Mario",
+  "last_name": "Rossi",
+  "matricola": "0001012345",
+  "degree_programme": "Ingegneria e scienze informatiche"
+}
+```
+
+An employee sends the same without `matricola` and `degree_programme`. The
+`201` response, and `GET /api/auth/me/`, return the account without the
+password:
+
+```json
+{
+  "id": 7,
+  "email": "mario.rossi@studio.unibo.it",
+  "role": "STUDENT",
+  "first_name": "Mario",
+  "last_name": "Rossi",
+  "matricola": "0001012345",
+  "degree_programme": "Ingegneria e scienze informatiche"
+}
+```
+
+For an employee, `matricola` and `degree_programme` are `""`. A validation
+error is a `400` keyed by field, e.g. `{"matricola": ["A matricola is a number
+of 6 to 10 digits."]}`.
+
+### Passwords and tokens
+
+- Passwords are stored only as salted hashes, by Django's default hasher
+  (PBKDF2), through `set_password`. No serializer has a readable `password`
+  field, and `tests/test_accounts_auth.py` checks that neither the password
+  nor its hash appears in any response of the sign-up flow.
+- Registration runs every validator in `AUTH_PASSWORD_VALIDATORS` — minimum
+  length, common passwords, entirely numeric passwords, and similarity to the
+  email and the names — against the candidate user.
+- Sessions use DRF's `TokenAuthentication`: `POST /api/auth/login/` returns a
+  random 40-character key, stored server-side in `authtoken_token`, one per
+  user. The key is not signed and does not expire; it stops working only when
+  the user logs out, which deletes it. Only the e-mail verification link is a
+  signed token with a lifetime (Django's `default_token_generator`, valid for
+  `PASSWORD_RESET_TIMEOUT`, three days by default).

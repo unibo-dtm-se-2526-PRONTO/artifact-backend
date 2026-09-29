@@ -8,7 +8,8 @@ license = "Apache 2.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-# update the Python versions in .github/workflows/check.yml if you change this
+# CI and the Dockerfile run on Python 3.12: update .github/workflows/check.yml
+# and the Dockerfile together if that changes
 python = ">= 3.10.0 < 4.0.0"
 django = "^5.2"
 python-dotenv = "^1.0.1"
@@ -21,7 +22,6 @@ openpyxl = "^3.1.5"
 coverage = "^7.4.0"
 mypy = "^1.10.1"
 poethepoet = "^0.37.0"
-poetry = "^1.8.3"
 pytest = "^8.3.5"
 ruff = "^0.15.0"
 pytest-django = "^4.2.0"
@@ -51,6 +51,9 @@ DJANGO_SETTINGS_MODULE = "pronto.settings"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "--strict-markers"
+markers = [
+    "postgres: needs PostgreSQL; skipped when the tests run on SQLite (see TEST_DATABASE_URL)",
+]
 
 [tool.mypy]
 # Django does not ship type stubs (no py.typed marker)

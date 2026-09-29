@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 from pronto.enums import OfficeCode
@@ -46,3 +48,62 @@ class Faq(models.Model):
 
     def __str__(self):
         return f"[{self.office_code}] {self.question_it}"
+
+
+class Inquiry(models.Model):
+    """A question a student asked about an office, and the FAQ it was matched to.
+
+    Two links are missing on purpose. There is no user: the questions are kept
+    to learn what the knowledge base lacks, and that needs the text, not who
+    wrote it. There is no appointment either: if the answer does not help, the
+    student books through the booking API, which records the suggested FAQ on
+    the appointment itself, so the dependency keeps running from `booking` to
+    `faq` and never back.
+
+    The primary key is a UUID because it is handed to the client, which quotes
+    it back to mark the question resolved: a sequential id would let anyone
+    resolve, or count, the questions of everybody else.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    office_code = models.CharField(
+        max_length=32,
+        choices=OfficeCode.choices,
+        verbose_name="codice ufficio",
+        help_text="L'ufficio scelto dallo studente, anche se la risposta è di un altro.",
+    )
+    text = models.TextField(verbose_name="domanda")
+    language = models.CharField(
+        max_length=2,
+        choices=[("it", "Italiano"), ("en", "Inglese")],
+        verbose_name="lingua",
+    )
+    # SET_NULL: retiring a FAQ must not erase the record of what was asked.
+    matched_faq = models.ForeignKey(
+        Faq,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inquiries",
+        verbose_name="FAQ proposta",
+    )
+    score = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name="punteggio",
+        help_text="La pertinenza della FAQ proposta; vuoto se non ne è stata trovata una.",
+    )
+    resolved = models.BooleanField(
+        default=False,
+        verbose_name="risolta",
+        help_text="Lo studente ha indicato che la FAQ proposta risponde alla domanda.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="posta il")
+
+    class Meta:
+        verbose_name = "domanda"
+        verbose_name_plural = "domande"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.office_code}] {self.text[:60]}"

@@ -4,7 +4,8 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from rest_framework.test import APIClient
+
+from tests.conftest import PASSWORD, authenticate, make_user
 
 User = get_user_model()
 
@@ -12,29 +13,23 @@ LOGIN_URL = "/api/auth/login/"
 LOGOUT_URL = "/api/auth/logout/"
 ME_URL = "/api/auth/me/"
 
-PASSWORD = "s3cret-passphrase"
-
-
-@pytest.fixture
-def client():
-    return APIClient()
-
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(
-        email="mario.rossi@studio.unibo.it",
-        password=PASSWORD,
-        role=User.Role.STUDENT,
-        is_active=True,  # already verified: these tests are about logging in
+    # Already verified, as make_user makes them: these tests are about logging in.
+    return make_user(
+        "mario.rossi@studio.unibo.it",
+        User.Role.STUDENT,
+        first_name="Mario",
+        last_name="Rossi",
+        matricola="0001012345",
+        degree_programme="Ingegneria e scienze informatiche",
     )
 
 
 @pytest.fixture
-def authenticated_client(client, user):
-    token = Token.objects.create(user=user)
-    client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
-    return client
+def authenticated_client(user):
+    return authenticate(user)
 
 
 @pytest.mark.django_db
@@ -144,6 +139,10 @@ def test_me_returns_the_authenticated_user(authenticated_client, user):
         "id": user.id,
         "email": user.email,
         "role": User.Role.STUDENT,
+        "first_name": "Mario",
+        "last_name": "Rossi",
+        "matricola": "0001012345",
+        "degree_programme": "Ingegneria e scienze informatiche",
     }
 
 
@@ -161,3 +160,56 @@ def test_token_is_no_longer_accepted_after_logout(authenticated_client):
     response = authenticated_client.get(ME_URL)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+def test_me_gives_an_employee_no_student_data(db):
+    employee = make_user(
+        "anna.bianchi@unibo.it",
+        User.Role.EMPLOYEE,
+        first_name="Anna",
+        last_name="Bianchi",
+    )
+
+    response = authenticate(employee).get(ME_URL)
+
+    assert response.json() == {
+        "id": employee.id,
+        "email": "anna.bianchi@unibo.it",
+        "role": User.Role.EMPLOYEE,
+        "first_name": "Anna",
+        "last_name": "Bianchi",
+        "matricola": "",
+        "degree_programme": "",
+    }
+
+
+@pytest.mark.django_db
+def test_no_endpoint_ever_returns_the_password_or_its_hash(client):
+    # NFR3, across the whole sign-up flow: neither the password the user typed
+    # nor the hash stored in its place appears in any response body.
+    register = client.post(
+        "/api/auth/register/",
+        {
+            "email": "anna.bianchi@unibo.it",
+            "password": PASSWORD,
+            "first_name": "Anna",
+            "last_name": "Bianchi",
+        },
+        format="json",
+    )
+    user = User.objects.get()
+    user.is_active = True
+    user.save()
+    login = client.post(
+        LOGIN_URL, {"email": user.email, "password": PASSWORD}, format="json"
+    )
+    client.credentials(HTTP_AUTHORIZATION=f"Token {login.json()['token']}")
+    me = client.get(ME_URL)
+
+    for response in (register, login, me):
+        assert response.status_code < 300
+        body = response.content.decode()
+        assert PASSWORD not in body
+        assert user.password not in body
+        assert "password" not in response.json()

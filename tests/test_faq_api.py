@@ -7,17 +7,11 @@ purpose.
 
 import pytest
 from rest_framework import status
-from rest_framework.test import APIClient
 
 from faq.models import Faq
 from pronto.enums import OfficeCode
 
 FAQS_URL = "/api/faqs/"
-
-
-@pytest.fixture
-def client():
-    return APIClient()
 
 
 @pytest.fixture

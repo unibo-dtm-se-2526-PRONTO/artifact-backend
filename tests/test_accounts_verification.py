@@ -5,26 +5,19 @@ from urllib.parse import urlparse
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework import status
-from rest_framework.test import APIClient
 
 from accounts.verification import verification_url
+from tests.conftest import PASSWORD
 
 User = get_user_model()
 
 REGISTER_URL = "/api/auth/register/"
 LOGIN_URL = "/api/auth/login/"
 
-PASSWORD = "s3cret-passphrase"
-
 
 def verification_path(user):
     """The verification link as a path, which is what the test client wants."""
     return urlparse(verification_url(user)).path
-
-
-@pytest.fixture
-def client():
-    return APIClient()
 
 
 @pytest.fixture
@@ -79,7 +72,12 @@ def test_a_link_for_an_unknown_user_is_rejected(client, user):
 def test_the_link_from_the_registration_email_works(client, mailoutbox):
     client.post(
         REGISTER_URL,
-        {"email": "anna.bianchi@unibo.it", "password": PASSWORD},
+        {
+            "email": "anna.bianchi@unibo.it",
+            "password": PASSWORD,
+            "first_name": "Anna",
+            "last_name": "Bianchi",
+        },
         format="json",
     )
     link = next(

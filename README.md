@@ -18,6 +18,7 @@ there, and so does CI. Install the same one locally, for example with
 poetry install                   # creates .venv/ inside the project
 cp .env.example .env             # then fill in the keys, see Configuration
 poetry run python manage.py migrate
+poetry run python manage.py seed_offices   # once per database, see Offices
 poetry run python manage.py runserver
 ```
 
@@ -37,6 +38,9 @@ overrides the `DB_*` keys, whatever `.env` says, and turns SSL off, because the
 local server has no certificate. Everything else — `SECRET_KEY` first of all —
 still comes from `.env`. The database lives in the `pgdata` volume;
 `docker compose down -v` throws it away.
+
+On a new database, create the offices once the backend is up:
+`docker compose exec backend python manage.py seed_offices`.
 
 `db` is published on `localhost:5432`, and on localhost only. If that port is
 taken by a PostgreSQL of your own, set `POSTGRES_HOST_PORT` (in the shell or in
@@ -276,6 +280,23 @@ is the one action scoping alone does not protect — a student reaches their own
 appointment legitimately — so `IsEmployee` guards it explicitly. `IsStudent`
 and `IsEmployee` live in `pronto/permissions.py`, because `faq` needs
 `IsStudent` too and cannot import from `booking`.
+
+### Offices
+
+The offices are data, not schema, so a fresh database has none: no employee
+can choose one, and nothing can be booked. `seed_offices` creates one per
+`OfficeCode`, active, with 30-minute slots, the Italian name of the code and
+the English one of the helpdesk spreadsheet:
+
+```bash
+poetry run python manage.py seed_offices
+```
+
+It only creates the offices that are missing, so running it again is safe and
+never undoes a change made in the admin since. The contact addresses it writes
+(`orientamento@unibo.it`, ...) follow the university's style but are made up:
+correct them in the admin before going live. Covered by
+`tests/test_booking_seed_offices.py`.
 
 ### Shifts
 

@@ -298,6 +298,14 @@ and withdrawn through `booking/services.py`, covered by
   declaring another, so both rules apply to every change
 - shifts written from the admin skip these checks, as appointments do
 
+Both rules hold under simultaneous requests too. Declaring, withdrawing and
+booking lock the employee's row first, so a withdrawal and a booking with the
+same employee run one after the other: the booking checks again, under the
+lock, that a shift still covers the slot, and the withdrawal sees a booking
+that committed while it waited. `tests/test_booking_concurrency.py` runs these
+races, and the one between simultaneous bookings, on PostgreSQL only: SQLite
+serialises every write, so there would be no race to observe.
+
 ### Notifications
 
 Every booking and cancellation sends e-mails, from `booking/notifications.py`,

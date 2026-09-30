@@ -155,6 +155,14 @@ def book_appointment(
             # Atomic so the IntegrityError below leaves no broken transaction
             # behind for the next attempt, or for the caller's own queries.
             with transaction.atomic():
+                # Locks the employee, as `withdraw_shift` does, so the shift
+                # that puts them on duty cannot go between this check and the
+                # insert. `_free_employee` read the shifts without a lock.
+                EmployeeProfile.objects.select_for_update().get(pk=employee.pk)
+                if not _on_duty(office, slot).filter(pk=employee.pk).exists():
+                    # Their shift was withdrawn in the meantime; a colleague
+                    # on duty may still be free.
+                    continue
                 appointment = Appointment.objects.create(
                     student=student,
                     office=office,
@@ -218,8 +226,12 @@ def withdraw_shift(shift):
     covered by the colleague's shifts, and a past one no longer needs anyone
     on duty. Refusing, rather than cancelling them, keeps the choice with a
     person: the employee cancels them first, and each student is told.
+
+    The employee is locked, as `book_appointment` does before inserting, so a
+    booking cannot slip into the shift between the check and the delete.
     """
     with transaction.atomic():
+        EmployeeProfile.objects.select_for_update().get(pk=shift.employee_id)
         held = list(
             Appointment.objects.filter(
                 employee=shift.employee,

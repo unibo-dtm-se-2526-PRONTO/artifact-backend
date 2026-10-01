@@ -1,7 +1,7 @@
 """Enumerations shared across the project's apps.
 
-Value objects only: no models and no app of their own, so `accounts`, `booking`
-and `faq` can all depend on them without depending on each other.
+Value objects only: no models and no app of their own, so `accounts`, `offices`,
+`booking` and `faq` can all depend on them without depending on each other.
 """
 
 from django.db import models

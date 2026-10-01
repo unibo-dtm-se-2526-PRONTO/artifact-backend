@@ -10,6 +10,7 @@ from rest_framework import status
 
 from faq.models import Faq
 from pronto.enums import OfficeCode
+from tests.conftest import office_for
 
 FAQS_URL = "/api/faqs/"
 
@@ -17,7 +18,7 @@ FAQS_URL = "/api/faqs/"
 @pytest.fixture
 def faq(db):
     return Faq.objects.create(
-        office_code=OfficeCode.ADMIN_OFFICE,
+        office=office_for(OfficeCode.ADMIN_OFFICE),
         question_it="Come richiedo un certificato di iscrizione?",
         question_en="How do I request a certificate of enrolment?",
         answer_it="Dal portale Studenti Online, sezione Certificati.",
@@ -82,7 +83,7 @@ def test_faq_list_hides_inactive_faqs(client, faq):
 @pytest.mark.django_db
 def test_faq_list_can_be_filtered_by_office(client, faq):
     other = Faq.objects.create(
-        office_code=OfficeCode.INTERNSHIPS,
+        office=office_for(OfficeCode.INTERNSHIPS),
         question_it="Come attivo un tirocinio?",
         question_en="How do I start an internship?",
         answer_it="Compilando il progetto formativo.",
@@ -92,6 +93,29 @@ def test_faq_list_can_be_filtered_by_office(client, faq):
     response = client.get(FAQS_URL, {"office": OfficeCode.INTERNSHIPS})
 
     assert [item["id"] for item in response.json()] == [other.id]
+
+
+@pytest.mark.django_db
+def test_faq_list_reads_the_offices_in_the_same_query(
+    client, faq, django_assert_num_queries
+):
+    for code in (OfficeCode.GUIDANCE, OfficeCode.INTERNSHIPS):
+        Faq.objects.create(
+            office=office_for(code),
+            question_it=f"Domanda per {code}?",
+            question_en=f"Question for {code}?",
+            answer_it="Risposta.",
+            answer_en="Answer.",
+        )
+
+    with django_assert_num_queries(1):
+        response = client.get(FAQS_URL)
+
+    assert [item["office_code"] for item in response.json()] == [
+        OfficeCode.ADMIN_OFFICE,
+        OfficeCode.GUIDANCE,
+        OfficeCode.INTERNSHIPS,
+    ]
 
 
 @pytest.mark.django_db

@@ -6,11 +6,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from offices.models import Office
 from pronto.enums import Role
 from pronto.i18n import LanguageAwareMixin
 from pronto.permissions import IsEmployee, IsStudent
 
-from .models import Appointment, EmployeeProfile, Office, Shift
+from .models import Appointment, EmployeeProfile, Shift
 from .serializers import (
     AppointmentCreateSerializer,
     AppointmentSerializer,

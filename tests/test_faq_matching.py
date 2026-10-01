@@ -16,11 +16,12 @@ from django.db import connection
 from faq.matching import MatchingUnavailable, find_best_match
 from faq.models import Faq
 from pronto.enums import OfficeCode
+from tests.conftest import office_for
 
 
 def make_faq(office_code, question_it, answer_it, question_en="", answer_en=""):
     return Faq.objects.create(
-        office_code=office_code,
+        office=office_for(office_code),
         question_it=question_it,
         answer_it=answer_it,
         question_en=question_en or question_it,

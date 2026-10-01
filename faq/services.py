@@ -13,15 +13,16 @@ class InquiryError(Exception):
     """A request about an inquiry that cannot be honoured."""
 
 
-def ask_question(office_code, text, language):
-    """Record a student's question and the FAQ that best answers it, if any.
+def ask_question(office, text, language):
+    """Record a student's question about `office` and the FAQ that best
+    answers it, if any.
 
     The search runs before anything is written, so a database that cannot
     search (see `MatchingUnavailable`) leaves no half-recorded question behind.
     """
-    match = find_best_match(text, office_code, language)
+    match = find_best_match(text, office.code, language)
     return Inquiry.objects.create(
-        office_code=office_code,
+        office=office,
         text=text,
         language=language,
         matched_faq=match.faq if match else None,

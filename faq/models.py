@@ -2,27 +2,27 @@ import uuid
 
 from django.db import models
 
-from pronto.enums import OfficeCode
+from offices.models import Office
 
 
 class Faq(models.Model):
-    """A published question and answer pair, filed under one office.
+    """A published question and answer pair, filed under one office."""
 
-    ``office_code`` is a plain choices field rather than a foreign key to
-    ``booking.Office``: the FAQ slice only ever needs to filter by office, and
-    a real relation would make the two vertical slices deploy and migrate
-    together for no gain. The shared ``OfficeCode`` enum is the contract
-    between them.
-    """
-
-    office_code = models.CharField(
-        max_length=32,
-        choices=OfficeCode.choices,
-        db_index=True,
-        verbose_name="codice ufficio",
+    # PROTECT: an office with FAQs filed under it must be emptied deliberately,
+    # never by deleting the office. An office that stops working is made
+    # inactive instead, which keeps its FAQs searchable.
+    office = models.ForeignKey(
+        Office,
+        on_delete=models.PROTECT,
+        related_name="faqs",
+        verbose_name="ufficio",
     )
-    question_it = models.CharField(max_length=255, verbose_name="domanda (italiano)")
-    question_en = models.CharField(max_length=255, verbose_name="domanda (inglese)")
+    # Text rather than a 255-character column: the helpdesk's questions are
+    # sometimes a paragraph of context, and they are stored as asked. The
+    # unique constraint below indexes the Italian one, which PostgreSQL allows
+    # up to about 2,700 bytes — far beyond any question in the knowledge base.
+    question_it = models.TextField(verbose_name="domanda (italiano)")
+    question_en = models.TextField(verbose_name="domanda (inglese)")
     answer_it = models.TextField(verbose_name="risposta (italiano)")
     answer_en = models.TextField(verbose_name="risposta (inglese)")
     is_active = models.BooleanField(
@@ -36,18 +36,18 @@ class Faq(models.Model):
     class Meta:
         verbose_name = "FAQ"
         verbose_name_plural = "FAQ"
-        ordering = ["office_code", "question_it"]
+        ordering = ["office__code", "question_it"]
         constraints = [
             # The natural key: seeding the same FAQ twice updates the existing
             # row instead of duplicating it, so the seed script stays idempotent.
             models.UniqueConstraint(
-                fields=["office_code", "question_it"],
+                fields=["office", "question_it"],
                 name="unique_faq_per_office_and_question",
             )
         ]
 
     def __str__(self):
-        return f"[{self.office_code}] {self.question_it}"
+        return f"[{self.office.code}] {self.question_it}"
 
 
 class MatchMethod(models.TextChoices):
@@ -73,10 +73,14 @@ class Inquiry(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    office_code = models.CharField(
-        max_length=32,
-        choices=OfficeCode.choices,
-        verbose_name="codice ufficio",
+    # PROTECT, as for a FAQ: the questions are the record of what students
+    # needed from an office, and deleting the office must not erase it. Not
+    # SET_NULL either, since a question nobody knows the office of says little.
+    office = models.ForeignKey(
+        Office,
+        on_delete=models.PROTECT,
+        related_name="inquiries",
+        verbose_name="ufficio",
         help_text="L'ufficio scelto dallo studente, anche se la risposta è di un altro.",
     )
     text = models.TextField(verbose_name="domanda")
@@ -122,4 +126,4 @@ class Inquiry(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"[{self.office_code}] {self.text[:60]}"
+        return f"[{self.office.code}] {self.text[:60]}"

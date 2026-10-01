@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from offices.models import Office
 from pronto.enums import OfficeCode
 from pronto.i18n import TranslatedField
 
@@ -9,6 +10,8 @@ from .models import Faq, Inquiry
 class FaqSerializer(serializers.ModelSerializer):
     """One published question and answer, in the language the caller asked for."""
 
+    # The office by its code, under the name the API has always used for it.
+    office_code = serializers.CharField(source="office.code", read_only=True)
     question = TranslatedField()
     answer = TranslatedField()
 
@@ -24,15 +27,24 @@ QUESTION_MAX_LENGTH = 1000
 
 
 class QuestionSerializer(serializers.Serializer):
-    """What a student sends to ask: an office and a free-text question.
+    """What a student sends to ask: an office, by its code, and a free-text
+    question.
 
-    The office is checked against `OfficeCode`, as the FAQ list does, rather
-    than against the offices taking bookings: the FAQ slice does not know about
-    those, and a question can be answered even where no one can be booked.
+    Any office will do, not only those taking bookings: a question can be
+    answered even where no one can be booked. The code is checked against
+    `OfficeCode` first, so an unknown one is refused with the error a choice
+    field gives; a valid code whose office does not exist in this database
+    gets the same answer, as there is nothing to file the question under.
     """
 
     office = serializers.ChoiceField(choices=OfficeCode.choices)
     question = serializers.CharField(max_length=QUESTION_MAX_LENGTH)
+
+    def validate_office(self, code):
+        office = Office.objects.filter(code=code).first()
+        if office is None:
+            self.fields["office"].fail("invalid_choice", input=code)
+        return office
 
 
 class SuggestedFaqSerializer(serializers.ModelSerializer):
@@ -57,7 +69,7 @@ class InquirySerializer(serializers.ModelSerializer):
     whatever the request that reads it back.
     """
 
-    office = serializers.CharField(source="office_code", read_only=True)
+    office = serializers.CharField(source="office.code", read_only=True)
     match = serializers.SerializerMethodField()
     office_reassigned = serializers.SerializerMethodField()
 
@@ -74,10 +86,10 @@ class InquirySerializer(serializers.ModelSerializer):
             "faq": SuggestedFaqSerializer(
                 faq, context={"language": inquiry.language}
             ).data,
-            "office": faq.office_code,
+            "office": faq.office.code,
             "score": inquiry.score,
         }
 
     def get_office_reassigned(self, inquiry):
         faq = inquiry.matched_faq
-        return faq is not None and faq.office_code != inquiry.office_code
+        return faq is not None and faq.office_id != inquiry.office_id

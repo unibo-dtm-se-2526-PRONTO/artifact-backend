@@ -14,6 +14,7 @@ from rest_framework.test import APIClient
 
 from faq.models import Faq, Inquiry
 from pronto.enums import OfficeCode
+from tests.conftest import office_for
 
 QUESTIONS_URL = "/api/questions/"
 
@@ -25,7 +26,7 @@ def resolve_url(inquiry_id):
 @pytest.fixture
 def certificate(db):
     return Faq.objects.create(
-        office_code=OfficeCode.ADMIN_OFFICE,
+        office=office_for(OfficeCode.ADMIN_OFFICE),
         question_it="Come richiedo un certificato di iscrizione?",
         question_en="How do I request a certificate of enrolment?",
         answer_it="Dal portale Studenti Online, sezione Certificati.",
@@ -36,7 +37,7 @@ def certificate(db):
 @pytest.fixture
 def internship(db):
     return Faq.objects.create(
-        office_code=OfficeCode.INTERNSHIPS,
+        office=office_for(OfficeCode.INTERNSHIPS),
         question_it="Come attivo un tirocinio curriculare?",
         question_en="How do I start a curricular internship?",
         answer_it="Compilando il progetto formativo su AlmaLaurea.",
@@ -89,7 +90,7 @@ def test_asking_records_the_question_and_its_match(student_client, certificate):
     ask(student_client, OfficeCode.ADMIN_OFFICE, "certificato di iscrizione")
 
     inquiry = Inquiry.objects.get()
-    assert inquiry.office_code == OfficeCode.ADMIN_OFFICE
+    assert inquiry.office.code == OfficeCode.ADMIN_OFFICE
     assert inquiry.text == "certificato di iscrizione"
     assert inquiry.language == "it"
     assert inquiry.matched_faq == certificate
@@ -158,7 +159,18 @@ def test_asking_about_an_unknown_office_is_refused(student_client):
     response = ask(student_client, "CANTEEN", "certificato")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "office" in response.json()
+    assert response.json() == {"office": ['"CANTEEN" is not a valid choice.']}
+    assert not Inquiry.objects.exists()
+
+
+@pytest.mark.django_db
+def test_asking_about_an_office_missing_from_the_database_is_refused(student_client):
+    # A valid code, but no office to file the question under: refused the way
+    # an unknown code is, rather than failing further down.
+    response = ask(student_client, OfficeCode.INTERNSHIPS, "tirocinio")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json() == {"office": ['"INTERNSHIPS" is not a valid choice.']}
     assert not Inquiry.objects.exists()
 
 
@@ -204,7 +216,7 @@ def test_asking_in_an_unsupported_language_is_refused(student_client):
 @pytest.fixture
 def answered(certificate):
     return Inquiry.objects.create(
-        office_code=OfficeCode.ADMIN_OFFICE,
+        office=office_for(OfficeCode.ADMIN_OFFICE),
         text="Come chiedo il certificato di iscrizione?",
         language="en",
         matched_faq=certificate,
@@ -215,7 +227,7 @@ def answered(certificate):
 @pytest.fixture
 def unanswered(db):
     return Inquiry.objects.create(
-        office_code=OfficeCode.ADMIN_OFFICE,
+        office=office_for(OfficeCode.ADMIN_OFFICE),
         text="Dove parcheggio la bicicletta?",
         language="it",
     )

@@ -11,7 +11,7 @@ def mark_existing_matches_as_full_text(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("faq", "0002_inquiry"),
+        ("faq", "0006_faq_question_text"),
     ]
 
     operations = [

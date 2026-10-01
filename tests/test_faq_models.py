@@ -3,29 +3,26 @@
 from datetime import timedelta
 
 import pytest
-from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.db.models import ProtectedError
 
-from faq.models import Faq
+from faq.models import Faq, Inquiry
 from pronto.enums import OfficeCode
+from tests.conftest import office_for
 
 
 def faq(**overrides):
-    """A valid, unsaved FAQ; pass keyword arguments to vary one field."""
+    """A valid, unsaved FAQ, filed under Guidance unless `office` says
+    otherwise; pass keyword arguments to vary one field."""
+    if "office" not in overrides:
+        overrides["office"] = office_for(OfficeCode.GUIDANCE)
     fields = {
-        "office_code": OfficeCode.GUIDANCE,
         "question_it": "Come mi iscrivo a un appello?",
         "question_en": "How do I sign up for an exam?",
         "answer_it": "Dalla sezione Esami di Studenti Online.",
         "answer_en": "From the Exams section of Studenti Online.",
     }
     return Faq(**{**fields, **overrides})
-
-
-def test_office_code_choices_come_from_the_shared_enum():
-    # The contract with the booking app: faq has no foreign key to Office, so
-    # the enum is the only thing keeping the two slices in agreement.
-    assert Faq._meta.get_field("office_code").choices == OfficeCode.choices
 
 
 @pytest.mark.django_db
@@ -76,11 +73,11 @@ def test_updating_a_faq_moves_the_updated_timestamp_forward():
 
 @pytest.mark.django_db
 def test_faqs_are_ordered_by_office_then_question():
-    faq(office_code=OfficeCode.INTERNSHIPS, question_it="Zeta?").save()
-    faq(office_code=OfficeCode.ADMIN_OFFICE, question_it="Beta?").save()
-    faq(office_code=OfficeCode.ADMIN_OFFICE, question_it="Alfa?").save()
+    faq(office=office_for(OfficeCode.INTERNSHIPS), question_it="Zeta?").save()
+    faq(office=office_for(OfficeCode.ADMIN_OFFICE), question_it="Beta?").save()
+    faq(office=office_for(OfficeCode.ADMIN_OFFICE), question_it="Alfa?").save()
 
-    assert [(f.office_code, f.question_it) for f in Faq.objects.all()] == [
+    assert [(f.office.code, f.question_it) for f in Faq.objects.all()] == [
         (OfficeCode.ADMIN_OFFICE, "Alfa?"),
         (OfficeCode.ADMIN_OFFICE, "Beta?"),
         (OfficeCode.INTERNSHIPS, "Zeta?"),
@@ -89,18 +86,29 @@ def test_faqs_are_ordered_by_office_then_question():
 
 @pytest.mark.django_db
 def test_the_same_question_can_be_filed_under_two_different_offices():
-    faq(office_code=OfficeCode.GUIDANCE).save()
+    faq(office=office_for(OfficeCode.GUIDANCE)).save()
 
-    faq(office_code=OfficeCode.INTERNSHIPS).save()
+    faq(office=office_for(OfficeCode.INTERNSHIPS)).save()
 
     assert Faq.objects.count() == 2
 
 
-def test_an_unknown_office_code_is_rejected_by_validation():
-    # Only full_clean() enforces choices: the database column is a plain
-    # CharField, so a bad value would otherwise be stored happily.
-    with pytest.raises(ValidationError):
-        faq(office_code="CANTEEN").full_clean()
+@pytest.mark.django_db
+def test_an_office_with_faqs_cannot_be_deleted():
+    stored = faq()
+    stored.save()
+
+    with pytest.raises(ProtectedError):
+        stored.office.delete()
+
+
+@pytest.mark.django_db
+def test_an_office_with_questions_asked_about_it_cannot_be_deleted():
+    office = office_for(OfficeCode.GUIDANCE)
+    Inquiry.objects.create(office=office, text="Come mi iscrivo?", language="it")
+
+    with pytest.raises(ProtectedError):
+        office.delete()
 
 
 @pytest.mark.django_db
@@ -111,6 +119,7 @@ def test_the_same_question_cannot_be_filed_twice_under_one_office():
         faq().save()
 
 
+@pytest.mark.django_db
 @pytest.mark.django_db
 def test_a_faq_is_displayed_as_its_office_and_italian_question():
     stored = faq()

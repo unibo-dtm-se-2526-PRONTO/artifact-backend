@@ -27,7 +27,7 @@ from booking.services import (
     complete_appointment,
 )
 from faq.models import Faq
-from pronto.enums import AppointmentStatus, OfficeCode, Role
+from pronto.enums import AppointmentStatus, Role
 from tests.conftest import make_user, slot_at
 
 User = get_user_model()
@@ -36,10 +36,10 @@ QUESTION = "Come faccio a cambiare il piano di studi?"
 
 
 @pytest.fixture
-def suggested(db):
+def suggested(office):
     """The FAQ the student was shown and found unhelpful."""
     return Faq.objects.create(
-        office_code=OfficeCode.GUIDANCE,
+        office=office,
         question_it="Come si modifica il piano di studi?",
         question_en="How do I change my study plan?",
         answer_it="Il piano di studi si modifica da Studenti Online entro ottobre.",

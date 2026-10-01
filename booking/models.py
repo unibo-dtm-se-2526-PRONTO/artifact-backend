@@ -2,44 +2,8 @@ from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
 
-from pronto.enums import AppointmentStatus, OfficeCode
-
-
-class Office(models.Model):
-    """A helpdesk office students can book an appointment with.
-
-    ``code`` is the stable identifier shared with the `faq` app and the
-    frontend; the display names are stored per language so the API can answer
-    in the language the student asked in.
-    """
-
-    code = models.CharField(
-        max_length=32,
-        unique=True,
-        choices=OfficeCode.choices,
-        verbose_name="codice ufficio",
-    )
-    name_it = models.CharField(max_length=128, verbose_name="nome (italiano)")
-    name_en = models.CharField(max_length=128, verbose_name="nome (inglese)")
-    contact_email = models.EmailField(verbose_name="email di contatto")
-    slot_duration_minutes = models.PositiveIntegerField(
-        default=30,
-        verbose_name="durata dello slot (minuti)",
-        help_text="Lunghezza di un appuntamento presso questo ufficio.",
-    )
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name="attivo",
-        help_text="Gli uffici non attivi non accettano nuove prenotazioni.",
-    )
-
-    class Meta:
-        verbose_name = "ufficio"
-        verbose_name_plural = "uffici"
-        ordering = ["code"]
-
-    def __str__(self):
-        return self.name_it
+from offices.models import Office
+from pronto.enums import AppointmentStatus
 
 
 class EmployeeProfile(models.Model):

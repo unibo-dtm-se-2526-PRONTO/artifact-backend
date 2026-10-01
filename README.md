@@ -19,6 +19,7 @@ poetry install                   # creates .venv/ inside the project
 cp .env.example .env             # then fill in the keys, see Configuration
 poetry run python manage.py migrate
 poetry run python manage.py seed_offices   # once per database, see Offices
+poetry run python manage.py import_faqs export.xlsx   # optional, see Importing FAQs
 poetry run python manage.py runserver
 ```
 
@@ -140,8 +141,9 @@ tests, two offices, their staff, a student, their authenticated clients, and a
 Monday to Friday, 9 to 17, unless a test passes other `shifts` to
 `make_employee`. For the accounts and FAQ tests, an anonymous `client` (DRF's
 `APIClient`, replacing pytest-django's fixture of the same name), the
-`PASSWORD` every test user is given, and `authenticate(user)`, which returns a
-client carrying that user's token. Fixtures stay local to a file while one file
+`PASSWORD` every test user is given, `authenticate(user)`, which returns a
+client carrying that user's token, and `office_for(code)`, the office a FAQ or
+a question is filed under, created as `seed_offices` would if missing. Fixtures stay local to a file while one file
 owns them; they move to `conftest.py` once a second file needs them.
 
 ## Continuous integration
@@ -252,6 +254,22 @@ of exposing the `_it` / `_en` columns. An unsupported code is a `400`. The
 questions endpoints are the one twist: there `lang` is the language the
 question is written in, and an inquiry is always read back in that language.
 
+## Apps
+
+| App | What it owns |
+|-----|--------------|
+| `accounts` | the user model, registration, login and e-mail verification |
+| `offices` | the helpdesk offices and `seed_offices` |
+| `faq` | the FAQs, the questions students ask (`Inquiry`), matching and the import |
+| `booking` | employee profiles, shifts and appointments, and the office endpoints |
+| `pronto` | the project: settings, URLs, and what every app shares — the enums, the `?lang` handling and the role permissions |
+
+The dependencies run one way. `faq` and `booking` both file their rows under
+an office, so both depend on `offices`, which depends on neither; `booking`
+also depends on `faq`, since an appointment records the FAQ that did not help,
+and `faq` never imports from `booking`. What two apps that do not depend on
+each other both need lives in `pronto` instead.
+
 ## Booking
 
 Appointments are never created directly from a view. Every booking goes through
@@ -296,10 +314,15 @@ and `IsEmployee` live in `pronto/permissions.py`, because `faq` needs
 
 ### Offices
 
+An office is `offices.Office`, in an app of its own because appointments,
+employee profiles, FAQs and students' questions all point to it with a foreign
+key. `OfficeCode` in `pronto/enums.py` is the set of valid codes, and the code
+is how the API names an office, in requests and responses alike.
+
 The offices are data, not schema, so a fresh database has none: no employee
-can choose one, and nothing can be booked. `seed_offices` creates one per
-`OfficeCode`, active, with 30-minute slots, the Italian name of the code and
-the English one of the helpdesk spreadsheet:
+can choose one, nothing can be booked, and no question can be asked.
+`seed_offices` creates one per `OfficeCode`, active, with 30-minute slots, the
+Italian name of the code and the English one of the helpdesk spreadsheet:
 
 ```bash
 poetry run python manage.py seed_offices
@@ -308,8 +331,15 @@ poetry run python manage.py seed_offices
 It only creates the offices that are missing, so running it again is safe and
 never undoes a change made in the admin since. The contact addresses it writes
 (`orientamento@unibo.it`, ...) follow the university's style but are made up:
-correct them in the admin before going live. Covered by
-`tests/test_booking_seed_offices.py`.
+correct them in the admin before going live. What a new office looks like is
+written once, in `offices/seed.py`: the FAQ import and the migration that
+linked the FAQs to their office create a missing office from the same data.
+Covered by `tests/test_offices_seed.py`.
+
+The model used to be `booking.Office`. Its table was taken over and renamed to
+`offices_office` by the migrations, not copied, so existing databases keep
+their offices, with the same ids; only the names of the table's index and
+constraints still begin with `booking_office`.
 
 ### Shifts
 
@@ -371,10 +401,10 @@ The FAQ endpoints are public, unlike the rest of the API. They exist to spare a
 phone call, so requiring an account first would defeat their purpose. Writing
 is not exposed over HTTP at all — FAQs are maintained in the Django admin.
 
-`faq.Faq` stores `office_code` as a plain choices field rather than a foreign
-key to `booking.Office`: the two slices share the `OfficeCode` enum in
-`pronto/enums.py` and nothing else, so neither has to migrate or deploy with
-the other.
+Each FAQ, and each question a student asks, is filed under an office with a
+foreign key to `offices.Office`, protected: an office with FAQs or questions
+cannot be deleted, only made inactive. The API still names offices by their
+code, as `office` in requests and `office_code` in the FAQs it returns.
 
 ### Asking a question
 
@@ -503,8 +533,11 @@ is git-ignored) and delete it once imported. The command, covered by
 `tests/test_faq_import.py`:
 
 - maps the office by its Italian name, then its English one, to `OfficeCode`.
-  Rows with an unknown office, no question, no answer, or a question longer
-  than 255 characters are skipped and counted by reason, never fatal
+  Rows with an unknown office, no question or no answer are skipped and
+  counted by reason, never fatal. Questions are stored whole, however long
+- creates the offices it needs that are not in the database yet, as
+  `seed_offices` would, and says which; so it can run before `seed_offices`,
+  which then only creates the rest. Offices already there are used as they are
 - anonymises every question and answer, in both languages, before storing it
 - fills a missing English answer with the Italian one, so English readers get
   an answer rather than an empty page; a missing English question falls back
@@ -512,7 +545,7 @@ is git-ignored) and delete it once imported. The command, covered by
 - creates FAQs **unpublished**: the text is about to go on a public endpoint
   and name detection is heuristic, so someone reads it in the admin first.
   `--publish` skips that review
-- is idempotent: `(office_code, question_it)` is the natural key, so a re-run
+- is idempotent: `(office, question_it)` is the natural key, so a re-run
   updates the FAQs it finds instead of duplicating them. The answers and the
   English question follow the sheet; when the sheet has no English answer, the
   stored one is replaced only while it is still the untranslated copy;

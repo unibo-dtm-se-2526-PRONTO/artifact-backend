@@ -13,6 +13,7 @@ from openpyxl import Workbook
 
 from faq.management.commands import import_faqs
 from faq.models import Faq
+from offices.models import Office
 from pronto.enums import OfficeCode
 
 HEADER = ("Ufficio", "Office", "Domanda", "Question", "Risposta")
@@ -65,7 +66,7 @@ def test_each_answered_row_becomes_a_faq(workbook):
     run(workbook)
 
     stored = Faq.objects.get(question_it="Come mi iscrivo?")
-    assert stored.office_code == OfficeCode.ADMIN_OFFICE
+    assert stored.office.code == OfficeCode.ADMIN_OFFICE
     assert stored.question_en == "How do I enrol?"
     assert stored.answer_it == "Da Studenti Online."
     assert Faq.objects.count() == 2
@@ -96,7 +97,32 @@ def test_the_office_is_read_from_either_office_column(tmp_path, ufficio, office,
 
     run(path)
 
-    assert Faq.objects.get().office_code == code
+    assert Faq.objects.get().office.code == code
+
+
+@pytest.mark.django_db
+def test_an_office_not_in_the_database_yet_is_created_as_seed_offices_would(
+    workbook,
+):
+    output = run(workbook)
+
+    admin_office = Office.objects.get(code=OfficeCode.ADMIN_OFFICE)
+    assert admin_office.name_it == "Segreteria studenti"
+    assert admin_office.name_en == "Student Administration Office"
+    assert admin_office.contact_email == "segreteria@unibo.it"
+    assert admin_office.is_active
+    assert "Offices created: ADMIN_OFFICE, INTERNATIONAL" in output
+
+
+@pytest.mark.django_db
+def test_an_office_already_in_the_database_is_used_as_it_is(other_office, workbook):
+    """`other_office` is the Student Administration Office, with its own names."""
+    output = run(workbook)
+
+    assert Faq.objects.get(question_it="Come mi iscrivo?").office == other_office
+    other_office.refresh_from_db()
+    assert other_office.name_en == "Student office"
+    assert "Offices created: INTERNATIONAL" in output
 
 
 @pytest.mark.django_db
@@ -165,6 +191,22 @@ def test_the_italian_question_stands_in_for_a_missing_english_one(tmp_path):
     run(path)
 
     assert Faq.objects.get().question_en == "Domanda?"
+
+
+@pytest.mark.django_db
+def test_a_long_question_is_imported_whole(tmp_path):
+    # The real export has a question of 308 characters: context first, then
+    # the question itself.
+    question = "Sono uno studente iscritto al secondo anno. " * 7 + "Come faccio?"
+    path = write_workbook(
+        tmp_path / "f.xlsx", ("Tirocini", "Internships", question, None, "R.")
+    )
+
+    output = run(path)
+
+    assert "Created: 1" in output
+    assert Faq.objects.get().question_it == question
+    assert len(question) > 255
 
 
 @pytest.mark.django_db
@@ -348,7 +390,6 @@ def test_unusable_rows_are_skipped_and_counted_by_reason(tmp_path):
         ("Tirocini", "Internships", "Come trovo un tirocinio?", "How?", None),
         ("Tirocini", "Internships", "Come trovo un'azienda?", "How?", "   "),
         ("Tirocini", "Internships", None, None, "Risposta senza domanda."),
-        ("Tirocini", "Internships", "x" * 256, "Too long", "R."),
         (None, None, None, None, None),
     )
 
@@ -356,11 +397,10 @@ def test_unusable_rows_are_skipped_and_counted_by_reason(tmp_path):
 
     assert Faq.objects.count() == 1
     assert "Created: 1" in output
-    assert "Skipped: 6" in output
+    assert "Skipped: 5" in output
     assert "unknown office: 1" in output
     assert "no answer: 2" in output
     assert "no question: 1" in output
-    assert "question longer than 255 characters: 1" in output
     assert "empty row: 1" in output
 
 

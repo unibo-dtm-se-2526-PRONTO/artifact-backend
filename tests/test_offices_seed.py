@@ -5,8 +5,8 @@ from io import StringIO
 import pytest
 from django.core.management import call_command
 
-from booking.management.commands.seed_offices import OFFICES
-from booking.models import Office
+from offices.models import Office
+from offices.seed import OFFICES
 from pronto.enums import OfficeCode
 
 

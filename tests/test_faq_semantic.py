@@ -31,6 +31,7 @@ from faq.matching import (
 from faq.models import Faq, Inquiry, MatchMethod
 from faq.services import ask_question
 from pronto.enums import OfficeCode
+from tests.conftest import office_for
 
 # Words that mean the same thing share a concept; any other word is ignored.
 CONCEPTS = {
@@ -91,7 +92,7 @@ def store_down(monkeypatch):
 
 def make_faq(office_code, question_it, question_en, is_active=True):
     return Faq.objects.create(
-        office_code=office_code,
+        office=office_for(office_code),
         question_it=question_it,
         question_en=question_en,
         answer_it="Dal portale Studenti Online.",
@@ -329,7 +330,7 @@ def test_only_the_entries_in_the_language_of_the_question_are_searched(
 
 @pytest.mark.django_db
 def test_only_the_candidates_are_searched(certificate, internship):
-    candidates = published().filter(office_code=OfficeCode.INTERNSHIPS)
+    candidates = published().filter(office__code=OfficeCode.INTERNSHIPS)
 
     assert (
         SemanticMatcher().best_match("Un attestato di iscrizione?", "it", candidates)
@@ -486,7 +487,7 @@ def test_asking_records_how_the_answer_was_found(monkeypatch, certificate):
         lambda *args: a_match(certificate, MatchMethod.SEMANTIC),
     )
 
-    inquiry = ask_question(OfficeCode.ADMIN_OFFICE, "Un attestato?", "it")
+    inquiry = ask_question(office_for(OfficeCode.ADMIN_OFFICE), "Un attestato?", "it")
 
     assert inquiry.matched_by == MatchMethod.SEMANTIC
 
@@ -495,6 +496,8 @@ def test_asking_records_how_the_answer_was_found(monkeypatch, certificate):
 def test_a_question_without_an_answer_records_no_method(monkeypatch):
     monkeypatch.setattr("faq.services.find_best_match", lambda *args: None)
 
-    inquiry = ask_question(OfficeCode.ADMIN_OFFICE, "Dove si trova la mensa?", "it")
+    inquiry = ask_question(
+        office_for(OfficeCode.ADMIN_OFFICE), "Dove si trova la mensa?", "it"
+    )
 
     assert inquiry.matched_by == ""

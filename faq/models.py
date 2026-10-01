@@ -17,8 +17,12 @@ class Faq(models.Model):
         related_name="faqs",
         verbose_name="ufficio",
     )
-    question_it = models.CharField(max_length=255, verbose_name="domanda (italiano)")
-    question_en = models.CharField(max_length=255, verbose_name="domanda (inglese)")
+    # Text rather than a 255-character column: the helpdesk's questions are
+    # sometimes a paragraph of context, and they are stored as asked. The
+    # unique constraint below indexes the Italian one, which PostgreSQL allows
+    # up to about 2,700 bytes — far beyond any question in the knowledge base.
+    question_it = models.TextField(verbose_name="domanda (italiano)")
+    question_en = models.TextField(verbose_name="domanda (inglese)")
     answer_it = models.TextField(verbose_name="risposta (italiano)")
     answer_en = models.TextField(verbose_name="risposta (inglese)")
     is_active = models.BooleanField(

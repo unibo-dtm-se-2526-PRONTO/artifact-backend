@@ -194,6 +194,22 @@ def test_the_italian_question_stands_in_for_a_missing_english_one(tmp_path):
 
 
 @pytest.mark.django_db
+def test_a_long_question_is_imported_whole(tmp_path):
+    # The real export has a question of 308 characters: context first, then
+    # the question itself.
+    question = "Sono uno studente iscritto al secondo anno. " * 7 + "Come faccio?"
+    path = write_workbook(
+        tmp_path / "f.xlsx", ("Tirocini", "Internships", question, None, "R.")
+    )
+
+    output = run(path)
+
+    assert "Created: 1" in output
+    assert Faq.objects.get().question_it == question
+    assert len(question) > 255
+
+
+@pytest.mark.django_db
 def test_imported_faqs_are_unpublished_until_someone_reviews_them(workbook):
     run(workbook)
 
@@ -374,7 +390,6 @@ def test_unusable_rows_are_skipped_and_counted_by_reason(tmp_path):
         ("Tirocini", "Internships", "Come trovo un tirocinio?", "How?", None),
         ("Tirocini", "Internships", "Come trovo un'azienda?", "How?", "   "),
         ("Tirocini", "Internships", None, None, "Risposta senza domanda."),
-        ("Tirocini", "Internships", "x" * 256, "Too long", "R."),
         (None, None, None, None, None),
     )
 
@@ -382,11 +397,10 @@ def test_unusable_rows_are_skipped_and_counted_by_reason(tmp_path):
 
     assert Faq.objects.count() == 1
     assert "Created: 1" in output
-    assert "Skipped: 6" in output
+    assert "Skipped: 5" in output
     assert "unknown office: 1" in output
     assert "no answer: 2" in output
     assert "no question: 1" in output
-    assert "question longer than 255 characters: 1" in output
     assert "empty row: 1" in output
 
 

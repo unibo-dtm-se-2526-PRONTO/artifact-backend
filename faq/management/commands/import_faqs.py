@@ -67,8 +67,6 @@ OFFICE_NAMES = {
 REQUIRED_COLUMNS = ("Domanda", "Risposta")
 OFFICE_COLUMNS = ("Ufficio", "Office")
 
-QUESTION_MAX_LENGTH = Faq._meta.get_field("question_it").max_length
-
 
 class SkippedRow(Exception):
     """A row that cannot become a FAQ; the message is the reason."""
@@ -173,8 +171,6 @@ def import_row(row, publish):
     question_en = anonymise(row.get("question", "")) or question_it
     answer_it = anonymise(row["risposta"])
     sheet_answer_en = anonymise(row.get("answer", ""))
-    if max(len(question_it), len(question_en)) > QUESTION_MAX_LENGTH:
-        raise SkippedRow(f"question longer than {QUESTION_MAX_LENGTH} characters")
 
     office, _created = seed_office(Office, office_code)
     faq = Faq.objects.filter(office=office, question_it=question_it).first()

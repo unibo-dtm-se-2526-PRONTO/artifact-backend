@@ -70,7 +70,7 @@ def knowledge_base(certificate, fees, internship):
 @pytest.mark.django_db
 def test_a_question_is_matched_with_the_best_faq_of_its_office(knowledge_base):
     match = find_best_match(
-        "Vorrei sapere come posso richiedere un certificato di iscrizione",
+        "Come richiedere un certificato di iscrizione?",
         office_code=OfficeCode.ADMIN_OFFICE,
         language="it",
     )
@@ -91,7 +91,9 @@ def test_italian_words_are_matched_by_their_stem(knowledge_base, certificate):
         == certificate
     )
     assert (
-        find_best_match("Quando si pagano le tasse?", OfficeCode.ADMIN_OFFICE, "it").faq
+        find_best_match(
+            "Come si pagano le tasse universitarie?", OfficeCode.ADMIN_OFFICE, "it"
+        ).faq
         == knowledge_base[1]
     )
 
@@ -152,11 +154,13 @@ def test_without_a_match_in_the_office_every_office_is_searched(
 @pytest.mark.postgres
 @pytest.mark.django_db
 def test_a_good_enough_match_in_the_office_wins_over_a_better_one_elsewhere(
-    knowledge_base,
+    settings, knowledge_base
 ):
     # All three words are in the internship FAQ, only one in the tutor FAQ:
     # the office asked about still comes first, as long as its answer clears
-    # the threshold.
+    # the threshold. That is the rule under test, not the threshold, which is
+    # set low enough here for a FAQ that shares a single word to clear it.
+    settings.FAQ_MATCH_MIN_RANK = 0.1
     tutor = make_faq(
         OfficeCode.ADMIN_OFFICE,
         "Chi è il mio tutor accademico?",
@@ -184,19 +188,19 @@ def test_an_unrelated_question_has_no_match(knowledge_base):
 
 @pytest.mark.postgres
 @pytest.mark.django_db
-def test_a_long_question_that_covers_a_faq_only_in_part_still_matches(
-    knowledge_base, fees
+def test_a_long_question_that_covers_a_faq_only_in_part_is_left_to_semantic_search(
+    knowledge_base,
 ):
-    # Two of its eight meaningful words are about fees: the lower end of what
-    # FAQ_MATCH_MIN_RANK has to let through.
+    # Two of its eight meaningful words are about fees (rank 0.15). On the real
+    # FAQs, a rank that low is as often a wrong answer as a right one, so full
+    # text leaves it to semantic search, which is off in this test.
     match = find_best_match(
         "Vorrei sapere se posso iscrivermi a un corso singolo pagando le tasse ridotte",
         OfficeCode.ADMIN_OFFICE,
         "it",
     )
 
-    assert match is not None
-    assert match.faq == fees
+    assert match is None
 
 
 @pytest.mark.postgres

@@ -6,11 +6,15 @@ candidates is the best answer, if any is relevant enough — with its own notion
 of score and threshold. `find_best_match` holds the policy on top: the office
 the student chose first, every office after.
 
-The only matcher today is PostgreSQL full-text search. Semantic search over
-embeddings (Chroma, IR4) is the planned second one; it would implement the same
-`Matcher` protocol and be passed to `find_best_match`.
+There are two matchers, tried in cascade (`CascadeMatcher`). PostgreSQL
+full-text search goes first: it is exact about the words the FAQs use (office
+names, portals, acronyms such as ER.GO). Only when it finds nothing relevant
+enough is semantic search over embeddings asked (Chroma, IR4), which finds a
+FAQ worded differently from the question. Each keeps its own score and
+threshold, which are never compared: a match says which matcher found it.
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Protocol
@@ -21,7 +25,10 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import connections
 from django.db.models import QuerySet
 
-from .models import Faq
+from . import vector_index
+from .models import Faq, MatchMethod
+
+logger = logging.getLogger(__name__)
 
 # The PostgreSQL text search configuration for each language the FAQs are
 # written in: it decides the stemmer and the stop words.
@@ -40,6 +47,7 @@ class Match:
 
     faq: Faq
     score: float
+    matched_by: MatchMethod
 
     @property
     def office_code(self):
@@ -100,7 +108,55 @@ class FullTextMatcher:
         )
         if best is None:
             return None
-        return Match(faq=best, score=best.score)
+        return Match(faq=best, score=best.score, matched_by=MatchMethod.FULL_TEXT)
+
+
+class SemanticMatcher:
+    """Ranks FAQs by the cosine similarity between the embedding of the
+    question and that of each FAQ's question, in the same language (see
+    `faq.vector_index`). ``FAQ_SEMANTIC_MIN_SIMILARITY`` is the similarity
+    below which a FAQ is not suggested.
+
+    The search is restricted to the candidates' ids, so the database still
+    decides what may be suggested: a FAQ unpublished while the vector store
+    was down is not suggested even if its entries are still there.
+
+    Semantic matching is an extra: with it off, or its store unreachable, this
+    matcher finds nothing, and the error is logged rather than raised, so the
+    student still gets the full-text answer, or the way to book.
+    """
+
+    def best_match(self, question, language, candidates):
+        try:
+            nearest = vector_index.nearest(
+                question, language, candidates.values_list("pk", flat=True)
+            )
+        except Exception:
+            logger.exception("Semantic FAQ search failed; using full-text only.")
+            return None
+        if nearest is None:
+            return None
+        faq_id, similarity = nearest
+        if similarity < settings.FAQ_SEMANTIC_MIN_SIMILARITY:
+            return None
+        faq = candidates.filter(pk=faq_id).first()
+        if faq is None:
+            return None
+        return Match(faq=faq, score=similarity, matched_by=MatchMethod.SEMANTIC)
+
+
+class CascadeMatcher:
+    """Asks each matcher in turn: the first one to find a match wins."""
+
+    def __init__(self, *matchers: Matcher):
+        self.matchers = matchers
+
+    def best_match(self, question, language, candidates):
+        for matcher in self.matchers:
+            match = matcher.best_match(question, language, candidates)
+            if match is not None:
+                return match
+        return None
 
 
 def find_best_match(question, office_code, language, matcher=None):
@@ -109,8 +165,10 @@ def find_best_match(question, office_code, language, matcher=None):
     The office the student chose is searched first. Only if nothing there is
     relevant enough are all the offices searched, so a student who picked the
     wrong office still gets an answer, and the match tells them whose it is.
+    The cascade runs whole in each step: a FAQ of the chosen office found by
+    semantic search wins over a full-text match in another office.
     """
-    matcher = matcher or FullTextMatcher()
+    matcher = matcher or CascadeMatcher(FullTextMatcher(), SemanticMatcher())
     published = Faq.objects.filter(is_active=True)
     return matcher.best_match(
         question, language, published.filter(office_code=office_code)

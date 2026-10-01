@@ -59,7 +59,7 @@ def test_asking_returns_the_matching_faq(student_client, certificate):
     response = ask(
         student_client,
         OfficeCode.ADMIN_OFFICE,
-        "Come chiedo il certificato di iscrizione?",
+        "Come richiedo il certificato di iscrizione?",
     )
 
     assert response.status_code == status.HTTP_201_CREATED

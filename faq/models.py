@@ -50,6 +50,13 @@ class Faq(models.Model):
         return f"[{self.office_code}] {self.question_it}"
 
 
+class MatchMethod(models.TextChoices):
+    """How a suggested FAQ was found, which says what its score measures."""
+
+    FULL_TEXT = "fulltext", "ricerca full-text"
+    SEMANTIC = "semantic", "similarità semantica"
+
+
 class Inquiry(models.Model):
     """A question a student asked about an office, and the FAQ it was matched to.
 
@@ -92,6 +99,15 @@ class Inquiry(models.Model):
         blank=True,
         verbose_name="punteggio",
         help_text="La pertinenza della FAQ proposta; vuoto se non ne è stata trovata una.",
+    )
+    # Not in the API: the student needs the answer, not how it was found. It
+    # is here to read the score, whose scale depends on the method.
+    matched_by = models.CharField(
+        max_length=16,
+        choices=MatchMethod.choices,
+        blank=True,
+        verbose_name="trovata con",
+        help_text="Il metodo che ha trovato la FAQ proposta, e quindi la scala del punteggio.",
     )
     resolved = models.BooleanField(
         default=False,

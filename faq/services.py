@@ -26,6 +26,7 @@ def ask_question(office_code, text, language):
         language=language,
         matched_faq=match.faq if match else None,
         score=match.score if match else None,
+        matched_by=match.matched_by if match else "",
     )
 
 

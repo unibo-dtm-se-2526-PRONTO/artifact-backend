@@ -26,9 +26,10 @@ class InquiryAdmin(admin.ModelAdmin):
         "text",
         "matched_faq",
         "score",
+        "matched_by",
         "resolved",
     ]
-    list_filter = ["office_code", "language", "resolved"]
+    list_filter = ["office_code", "language", "matched_by", "resolved"]
     search_fields = ["text"]
     date_hierarchy = "created_at"
     readonly_fields = [
@@ -38,6 +39,7 @@ class InquiryAdmin(admin.ModelAdmin):
         "language",
         "matched_faq",
         "score",
+        "matched_by",
         "resolved",
         "created_at",
     ]

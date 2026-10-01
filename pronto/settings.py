@@ -256,10 +256,34 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # The lowest full-text rank at which a FAQ is suggested as the answer to a
 # question. A word of the question found in a FAQ's question counts about 0.6,
 # one found only in its answer about 0.25, and the rank is the average over the
-# meaningful words of the question. On the examples in tests/test_faq_matching.py, questions a FAQ
-# does answer score 0.15 to 0.65, even when padded with "vorrei sapere se...";
-# one that shares a single word with an answer (the "online" of "Studenti
-# Online") scores 0.04. 0.1 sits in the gap, closer to the noise, because
-# suggesting a wrong answer costs a click while missing a right one costs a
-# phone call or an appointment.
-FAQ_MATCH_MIN_RANK = 0.1
+# meaningful words of the question. Calibrated on the 178 real FAQs with 21
+# rephrased questions and 10 that no FAQ answers: below 0.45, wrong answers
+# score as high as right ones (a single shared word such as "ora" or "campus"
+# reaches 0.2-0.3), and at 0.1 every one of the 10 got a FAQ. What full text
+# lets through is left to semantic search (FAQ_SEMANTIC_MIN_SIMILARITY below).
+FAQ_MATCH_MIN_RANK = 0.45
+
+
+# Semantic FAQ matching (faq/vector_index.py)
+# Chroma holds the embeddings of the published FAQs and is asked only when
+# full-text search finds nothing (see faq/matching.py). With CHROMA_HOST empty,
+# semantic matching is off and full-text search works alone; docker-compose.yml
+# points it at its chroma service. Tests never reach a server: the ones about
+# semantic matching give it an in-memory store of their own.
+CHROMA_HOST = os.getenv("CHROMA_HOST", "")
+CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
+if "PYTEST_VERSION" in os.environ or "test" in sys.argv:
+    CHROMA_HOST = ""
+# Multilingual, so Italian and English questions are embedded equally well. It
+# runs on ONNX through fastembed, without PyTorch, and is downloaded on first
+# use (about 220 MB).
+FAQ_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# The lowest cosine similarity, between the question and a FAQ's question, at
+# which a FAQ is suggested; its scale has nothing to do with FAQ_MATCH_MIN_RANK.
+# Same calibration as above: rephrased questions find their FAQ at 0.70-1.00,
+# Italian and English alike, while the closest FAQ to a question none answers
+# scores 0.37-0.65 ("A che ora apre la mensa?" -> an open day, 0.65). Together
+# with full text at 0.45: 14 of 21 answered right, 2 wrong, none of the 10
+# answered. Inquiry.matched_by and resolved are there to check this on real
+# questions.
+FAQ_SEMANTIC_MIN_SIMILARITY = 0.7

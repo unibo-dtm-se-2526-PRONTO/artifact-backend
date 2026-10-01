@@ -1,8 +1,8 @@
 """What a newly created office looks like, one per ``OfficeCode``.
 
-The one place that knows it: whatever creates an office — the
-``seed_offices`` command first of all — goes through `seed_office`, so an
-office made by any of them is the same office.
+The one place that knows it: the ``seed_offices`` command, the FAQ import and
+the migration that linked the FAQs to their office all create offices through
+`seed_office`, so an office made by any of them is the same office.
 
 Plain data and no model import, so a migration can use it with its historical
 model: `seed_office` takes the model to create with.

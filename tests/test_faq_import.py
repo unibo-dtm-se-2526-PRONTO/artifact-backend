@@ -13,6 +13,7 @@ from openpyxl import Workbook
 
 from faq.management.commands import import_faqs
 from faq.models import Faq
+from offices.models import Office
 from pronto.enums import OfficeCode
 
 HEADER = ("Ufficio", "Office", "Domanda", "Question", "Risposta")
@@ -65,7 +66,7 @@ def test_each_answered_row_becomes_a_faq(workbook):
     run(workbook)
 
     stored = Faq.objects.get(question_it="Come mi iscrivo?")
-    assert stored.office_code == OfficeCode.ADMIN_OFFICE
+    assert stored.office.code == OfficeCode.ADMIN_OFFICE
     assert stored.question_en == "How do I enrol?"
     assert stored.answer_it == "Da Studenti Online."
     assert Faq.objects.count() == 2
@@ -96,7 +97,32 @@ def test_the_office_is_read_from_either_office_column(tmp_path, ufficio, office,
 
     run(path)
 
-    assert Faq.objects.get().office_code == code
+    assert Faq.objects.get().office.code == code
+
+
+@pytest.mark.django_db
+def test_an_office_not_in_the_database_yet_is_created_as_seed_offices_would(
+    workbook,
+):
+    output = run(workbook)
+
+    admin_office = Office.objects.get(code=OfficeCode.ADMIN_OFFICE)
+    assert admin_office.name_it == "Segreteria studenti"
+    assert admin_office.name_en == "Student Administration Office"
+    assert admin_office.contact_email == "segreteria@unibo.it"
+    assert admin_office.is_active
+    assert "Offices created: ADMIN_OFFICE, INTERNATIONAL" in output
+
+
+@pytest.mark.django_db
+def test_an_office_already_in_the_database_is_used_as_it_is(other_office, workbook):
+    """`other_office` is the Student Administration Office, with its own names."""
+    output = run(workbook)
+
+    assert Faq.objects.get(question_it="Come mi iscrivo?").office == other_office
+    other_office.refresh_from_db()
+    assert other_office.name_en == "Student office"
+    assert "Offices created: INTERNATIONAL" in output
 
 
 @pytest.mark.django_db

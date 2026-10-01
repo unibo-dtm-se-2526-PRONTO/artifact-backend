@@ -11,6 +11,10 @@ What happens to each row:
 - the office is looked up by its Italian name, then its English one; a row
   whose office is not one of ``OfficeCode`` is skipped, as is a row without a
   question or an answer. Skipped rows are counted by reason, never fatal
+- an office the sheet names that does not exist in the database yet is
+  created, as ``seed_offices`` would create it (``offices.seed``), so the
+  import does not depend on the offices having been seeded first. Offices
+  already there are used as they are
 - every text is anonymised (``faq.anonymisation``) before it is stored or
   compared, so personal data never reaches the database
 - a missing English answer is replaced by the Italian one until someone
@@ -20,7 +24,7 @@ What happens to each row:
   heuristic and the text is about to be shown on a public endpoint: someone
   reads them in the admin first. ``--publish`` skips that review
 
-The import is idempotent. ``(office_code, question_it)`` is the natural key
+The import is idempotent. ``(office, question_it)`` is the natural key
 (see ``Faq.Meta``), so running it again updates the FAQs it finds instead of
 duplicating them: the answers and the English question follow the sheet. When
 the sheet has no English answer, the stored one is replaced only while it is
@@ -39,6 +43,8 @@ from openpyxl.utils.exceptions import InvalidFileException
 
 from faq.anonymisation import anonymise
 from faq.models import Faq
+from offices.models import Office
+from offices.seed import seed_office
 from pronto.enums import OfficeCode
 
 # The office names used by the helpdesk, in both languages, lower-cased. The
@@ -90,14 +96,20 @@ class Command(BaseCommand):
         outcomes = Counter()
         skipped = Counter()
         with transaction.atomic():
+            offices_before = set(Office.objects.values_list("code", flat=True))
             for row in rows:
                 try:
                     outcomes[import_row(row, publish)] += 1
                 except SkippedRow as reason:
                     skipped[str(reason)] += 1
-        self.report(outcomes, skipped)
+            new_offices = sorted(
+                set(Office.objects.values_list("code", flat=True)) - offices_before
+            )
+        self.report(outcomes, skipped, new_offices)
 
-    def report(self, outcomes, skipped):
+    def report(self, outcomes, skipped, new_offices):
+        if new_offices:
+            self.stdout.write(f"Offices created: {', '.join(new_offices)}")
         self.stdout.write(f"Created: {outcomes['created']}")
         self.stdout.write(f"Updated: {outcomes['updated']}")
         self.stdout.write(f"Unchanged: {outcomes['unchanged']}")
@@ -164,10 +176,11 @@ def import_row(row, publish):
     if max(len(question_it), len(question_en)) > QUESTION_MAX_LENGTH:
         raise SkippedRow(f"question longer than {QUESTION_MAX_LENGTH} characters")
 
-    faq = Faq.objects.filter(office_code=office_code, question_it=question_it).first()
+    office, _created = seed_office(Office, office_code)
+    faq = Faq.objects.filter(office=office, question_it=question_it).first()
     if faq is None:
         Faq.objects.create(
-            office_code=office_code,
+            office=office,
             question_it=question_it,
             question_en=question_en,
             answer_it=answer_it,

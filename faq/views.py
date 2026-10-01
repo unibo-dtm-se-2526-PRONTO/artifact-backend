@@ -25,7 +25,8 @@ class PublishedFaqMixin(LanguageAwareMixin):
 
     serializer_class = FaqSerializer
     permission_classes = [AllowAny]
-    queryset = Faq.objects.filter(is_active=True)
+    # Each FAQ is answered with its office's code: one join, not a query per row.
+    queryset = Faq.objects.filter(is_active=True).select_related("office")
 
 
 class FaqListView(PublishedFaqMixin, generics.ListAPIView):
@@ -42,7 +43,7 @@ class FaqListView(PublishedFaqMixin, generics.ListAPIView):
                     "office": f"Unknown office. Available: {', '.join(OfficeCode.values)}."
                 }
             )
-        return queryset.filter(office_code=office_code)
+        return queryset.filter(office__code=office_code)
 
 
 class FaqDetailView(PublishedFaqMixin, generics.RetrieveAPIView):
@@ -65,7 +66,7 @@ class QuestionCreateView(APIView):
         serializer = QuestionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         inquiry = ask_question(
-            office_code=serializer.validated_data["office"],
+            office=serializer.validated_data["office"],
             text=serializer.validated_data["question"],
             language=language,
         )
@@ -83,7 +84,7 @@ class QuestionResolveView(APIView):
 
     def post(self, request, pk):
         inquiry = get_object_or_404(
-            Inquiry.objects.select_related("matched_faq"), pk=pk
+            Inquiry.objects.select_related("office", "matched_faq__office"), pk=pk
         )
         try:
             resolve_inquiry(inquiry)

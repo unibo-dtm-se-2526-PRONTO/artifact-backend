@@ -44,7 +44,7 @@ class Match:
     @property
     def office_code(self):
         """The office the answer belongs to, which may not be the one asked."""
-        return self.faq.office_code
+        return self.faq.office.code
 
 
 class Matcher(Protocol):
@@ -111,7 +111,8 @@ def find_best_match(question, office_code, language, matcher=None):
     wrong office still gets an answer, and the match tells them whose it is.
     """
     matcher = matcher or FullTextMatcher()
-    published = Faq.objects.filter(is_active=True)
+    # The office comes along with the FAQ: the answer is reported with it.
+    published = Faq.objects.filter(is_active=True).select_related("office")
     return matcher.best_match(
-        question, language, published.filter(office_code=office_code)
+        question, language, published.filter(office__code=office_code)
     ) or matcher.best_match(question, language, published)

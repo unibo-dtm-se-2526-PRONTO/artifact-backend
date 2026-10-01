@@ -329,9 +329,9 @@ def test_a_completed_appointment_still_belongs_to_the_student(
 
 
 @pytest.fixture
-def faq(db):
+def faq(office):
     return Faq.objects.create(
-        office_code=OfficeCode.GUIDANCE,
+        office=office,
         question_it="Come si modifica il piano di studi?",
         question_en="How do I change my study plan?",
         answer_it="Da Studenti Online, entro ottobre.",

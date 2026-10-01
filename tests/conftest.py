@@ -5,7 +5,8 @@ from several angles — models, constraints, services, offices and appointments 
 and all of them need the same cast: an office, someone staffing it, a student,
 and a day in the future that is not a weekend. The accounts and FAQ tests share
 less: an anonymous `client`, the `PASSWORD` every test user has, and
-`authenticate` to give a user a token.
+`authenticate` to give a user a token. FAQs and questions are filed under an
+office: `office_for` gives the one with a code, creating it if needed.
 
 Every employee made here works Monday to Friday, 9 to 17, unless a test asks
 for other shifts. That is the timetable the helpdesk had before shifts existed,
@@ -32,6 +33,7 @@ from rest_framework.test import APIClient
 
 from booking.models import EmployeeProfile, Shift
 from offices.models import Office
+from offices.seed import seed_office
 from pronto.enums import OfficeCode
 
 User = get_user_model()
@@ -93,6 +95,12 @@ def make_employee(office, email="anna.bianchi@unibo.it", shifts=WORKING_WEEK):
         for weekday, start, end in shifts
     )
     return employee
+
+
+def office_for(code):
+    """The office with `code`; if there is none yet, it is created as
+    `seed_offices` would create it."""
+    return seed_office(Office, code)[0]
 
 
 def authenticate(user):

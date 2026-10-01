@@ -5,9 +5,17 @@ from .models import Faq, Inquiry
 
 @admin.register(Faq)
 class FaqAdmin(admin.ModelAdmin):
-    list_display = ["office_code", "question_it", "is_active", "updated_at"]
-    list_filter = ["office_code", "is_active"]
-    search_fields = ["question_it", "question_en", "answer_it", "answer_en"]
+    list_display = ["office", "question_it", "is_active", "updated_at"]
+    list_filter = ["office", "is_active"]
+    list_select_related = ["office"]
+    search_fields = [
+        "question_it",
+        "question_en",
+        "answer_it",
+        "answer_en",
+        "office__code",
+        "office__name_it",
+    ]
     readonly_fields = ["created_at", "updated_at"]
 
 
@@ -22,18 +30,21 @@ class InquiryAdmin(admin.ModelAdmin):
 
     list_display = [
         "created_at",
-        "office_code",
+        "office",
         "text",
         "matched_faq",
         "score",
         "resolved",
     ]
-    list_filter = ["office_code", "language", "resolved"]
-    search_fields = ["text"]
+    list_filter = ["office", "language", "resolved"]
+    # The office and the FAQ are both shown, and a FAQ is shown with its own
+    # office's code: one join for all of them instead of a query per row.
+    list_select_related = ["office", "matched_faq__office"]
+    search_fields = ["text", "office__code", "office__name_it"]
     date_hierarchy = "created_at"
     readonly_fields = [
         "id",
-        "office_code",
+        "office",
         "text",
         "language",
         "matched_faq",

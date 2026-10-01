@@ -1,9 +1,10 @@
 from rest_framework import serializers
 
 from faq.models import Faq
+from offices.models import Office
 from pronto.i18n import TranslatedField
 
-from .models import Appointment, EmployeeProfile, Office, Shift
+from .models import Appointment, EmployeeProfile, Shift
 from .services import BookingError, book_appointment
 
 

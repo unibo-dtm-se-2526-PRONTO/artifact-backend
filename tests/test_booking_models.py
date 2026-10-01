@@ -1,4 +1,4 @@
-"""Tests for the booking models: offices, employee profiles and appointments.
+"""Tests for the booking models: employee profiles and appointments.
 
 `office`, `student` and `employee` come from `tests/conftest.py`. The
 constraint on (employee, slot) is tested in `tests/test_booking_constraints.py`.
@@ -12,7 +12,8 @@ from django.db import IntegrityError
 from django.db.models import ProtectedError
 from django.utils import timezone
 
-from booking.models import Appointment, EmployeeProfile, Office
+from booking.models import Appointment, EmployeeProfile
+from offices.models import Office
 from pronto.enums import AppointmentStatus, OfficeCode
 from tests.conftest import make_employee
 
@@ -33,44 +34,6 @@ def book(student, employee, slot, **overrides):
         "question_lang": "it",
     }
     return Appointment.objects.create(**{**fields, **overrides})
-
-
-# --- Office ---------------------------------------------------------------
-
-
-def test_office_codes_come_from_the_shared_enum():
-    assert Office._meta.get_field("code").choices == OfficeCode.choices
-
-
-@pytest.mark.django_db
-def test_a_new_office_is_active_and_books_half_hour_slots():
-    # Created here rather than taken from conftest: the shared fixture sets
-    # slot_duration_minutes explicitly, which would hide the default.
-    office = Office.objects.create(
-        code=OfficeCode.GUIDANCE,
-        name_it="Orientamento",
-        name_en="Guidance",
-        contact_email="orientamento@unibo.it",
-    )
-
-    assert office.is_active
-    assert office.slot_duration_minutes == 30
-
-
-@pytest.mark.django_db
-def test_an_office_is_displayed_by_its_italian_name(office):
-    assert str(office) == "Orientamento"
-
-
-@pytest.mark.django_db
-def test_two_offices_cannot_share_a_code(office):
-    with pytest.raises(IntegrityError):
-        Office.objects.create(
-            code=OfficeCode.GUIDANCE,
-            name_it="Orientamento (bis)",
-            name_en="Guidance (bis)",
-            contact_email="altro@unibo.it",
-        )
 
 
 # --- EmployeeProfile ------------------------------------------------------

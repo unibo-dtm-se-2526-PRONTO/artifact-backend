@@ -5,7 +5,7 @@ from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from booking.models import Office
+from offices.models import Office
 from tests.conftest import make_employee, slot_at
 from pronto.enums import OfficeCode
 

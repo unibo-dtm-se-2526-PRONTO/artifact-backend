@@ -30,7 +30,8 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from booking.models import EmployeeProfile, Office, Shift
+from booking.models import EmployeeProfile, Shift
+from offices.models import Office
 from pronto.enums import OfficeCode
 
 User = get_user_model()

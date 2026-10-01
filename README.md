@@ -28,10 +28,11 @@ poetry run python manage.py runserver
 docker compose up --build
 ```
 
-starts two containers: `db`, a PostgreSQL 16, and `backend`, which applies the
-migrations and serves the API on <http://localhost:8000>. The backend waits
-until `pg_isready` reports the database healthy, so it never starts migrating
-against a server that is still booting.
+starts three containers: `db`, a PostgreSQL 16; `chroma`, the vector store of
+semantic FAQ matching (see [FAQ matching](#faq-matching)); and `backend`, which
+applies the migrations and serves the API on <http://localhost:8000>. The
+backend waits until both report healthy, so it never starts migrating against
+a server that is still booting.
 
 In compose the backend always talks to the `db` container: `docker-compose.yml`
 overrides the `DB_*` keys, whatever `.env` says, and turns SSL off, because the
@@ -40,11 +41,17 @@ still comes from `.env`. The database lives in the `pgdata` volume;
 `docker compose down -v` throws it away.
 
 On a new database, create the offices once the backend is up:
-`docker compose exec backend python manage.py seed_offices`.
+`docker compose exec backend python manage.py seed_offices`. On a new vector
+store, index the published FAQs:
+`docker compose exec backend python manage.py rebuild_faq_index`. The
+embedding model is downloaded on the first question or FAQ to embed (about
+220 MB) and kept in the `fastembed` volume.
 
 `db` is published on `localhost:5432`, and on localhost only. If that port is
 taken by a PostgreSQL of your own, set `POSTGRES_HOST_PORT` (in the shell or in
-`.env`) to publish it elsewhere.
+`.env`) to publish it elsewhere. `chroma` is published on `localhost:8001`
+(`CHROMA_HOST_PORT`), so a backend run outside compose can reach it with
+`CHROMA_HOST=127.0.0.1` and `CHROMA_PORT=8001`.
 
 ## Running the tests
 
@@ -192,6 +199,12 @@ without SSL, as `docker-compose.yml` does for its `db`. Two more keys concern
 only a developer's machine: `TEST_DATABASE_URL` (empty: tests on SQLite, see
 [Test database](#test-database)) and `POSTGRES_HOST_PORT` (default `5432`, the
 host port of the compose `db`).
+
+Semantic FAQ matching reads `CHROMA_HOST` and `CHROMA_PORT` (default `8000`).
+With `CHROMA_HOST` empty, the default, it is off and full-text search works
+alone; compose sets it to its `chroma` service. Tests never use it.
+`FASTEMBED_CACHE_PATH` is where the embedding model is kept (by default a
+temporary directory).
 
 E-mails are printed to the console unless `EMAIL_BACKEND` is set to
 `django.core.mail.backends.smtp.EmailBackend`; the SMTP server is then read
@@ -413,7 +426,11 @@ The inquiries are listed, read-only, in the admin.
 ### FAQ matching
 
 The matching lives in `faq/matching.py`; `faq/services.py` stores the result.
-It is PostgreSQL full-text search, from `django.contrib.postgres.search`:
+Two matchers are tried in cascade: PostgreSQL full-text search first, and
+semantic search over embeddings only when full text finds nothing relevant
+enough. Each has its own score and threshold, which are never compared.
+
+Full-text search comes from `django.contrib.postgres.search`:
 
 - only published FAQs are searched, in the language of the question: its
   question and answer columns, with the `italian` or `english` text search
@@ -425,14 +442,10 @@ It is PostgreSQL full-text search, from `django.contrib.postgres.search`:
   a sentence, and requiring every word of it would match almost nothing.
   `ts_rank` averages over the words of the question, so a FAQ scores by how
   much of the question it covers, and short and long questions are comparable;
-- a FAQ is suggested only if its score reaches `FAQ_MATCH_MIN_RANK`, `0.1` by
-  default, in `pronto/settings.py`. On the examples in
-  `tests/test_faq_matching.py`, questions a FAQ answers score 0.15 to 0.65,
-  while one that only shares a word with an answer (the "online" of "Studenti
-  Online") scores 0.04. The comment on the setting explains the choice;
-- the office the student chose is searched first. Only if nothing there
-  reaches the threshold are all offices searched, and the best of those is
-  returned with its own office.
+- a FAQ is suggested only if its score reaches `FAQ_MATCH_MIN_RANK`, `0.45`,
+  in `pronto/settings.py`. It was calibrated on the real FAQs: below it, a
+  question that shares a single word with a FAQ ("ora", "campus") scores as
+  high as one the FAQ answers. The comment on the setting has the numbers.
 
 The vectors are computed at query time, with no stored column and no GIN
 index: the knowledge base is a few hundred rows at most, where an index would
@@ -444,16 +457,42 @@ The search only exists on PostgreSQL. On any other database the service raises
 like a knowledge base with no answer; the tests that reach it are marked
 `postgres`.
 
-Semantic search over embeddings (Chroma, IR4) is a planned extension and is
-not implemented. The service is split for it: a matcher (`FullTextMatcher`)
-only finds the best candidate among a set of FAQs, with its own score and
-threshold, while `find_best_match` applies the office-first policy on top. A
-vector matcher would implement the same `Matcher` protocol and be passed in.
+Semantic search (IR4) finds a FAQ worded differently from the question:
+
+- `faq/vector_index.py` keeps, in Chroma, the embedding of each published
+  FAQ's question in both languages. The embeddings come from
+  `paraphrase-multilingual-MiniLM-L12-v2`, run on ONNX by fastembed, so Italian
+  and English are embedded equally well, without PyTorch and without sending
+  any text to a third party;
+- saving or deleting a FAQ updates its entries after the commit
+  (`faq/signals.py`); a failure is logged and never stops the save.
+  `rebuild_faq_index` indexes every published FAQ again, for a new store, or
+  after the store was down or FAQs were changed in bulk;
+- `SemanticMatcher` suggests the closest FAQ in the language of the question
+  if its cosine similarity reaches `FAQ_SEMANTIC_MIN_SIMILARITY`, `0.7`. It
+  only searches the candidates the database gives it, so an unpublished FAQ is
+  never suggested even if the store still holds it;
+- if Chroma is off (`CHROMA_HOST` empty) or unreachable, semantic search finds
+  nothing and logs why: the student gets the full-text answer, or none.
+
+Each matcher (`FullTextMatcher`, `SemanticMatcher`) only finds the best
+candidate among a set of FAQs; `CascadeMatcher` chains them, and
+`find_best_match` applies the office-first policy on top: the office the
+student chose is searched first, with the whole cascade, and only if nothing
+there is found are all offices searched, the best of those being returned with
+its own office.
+
+`Inquiry.matched_by` records which matcher found the suggested FAQ, and so the
+scale of its score. It is shown and filterable in the admin, not returned by
+the API: together with `resolved`, it is how the two thresholds can be checked
+against real questions. The semantic tests (`tests/test_faq_semantic.py`) use
+an in-memory Chroma and a fake embedding, so they need neither the server nor
+the model.
 
 ### Importing FAQs
 
 The knowledge base is seeded from the helpdesk's spreadsheet, with columns
-`Ufficio | Office | Domanda | Question | Risposta`:
+`Ufficio | Office | Domanda | Question | Risposta | Answer`:
 
 ```bash
 poetry run python manage.py import_faqs path/to/export.xlsx [--sheet NAME] [--publish]
@@ -467,22 +506,22 @@ is git-ignored) and delete it once imported. The command, covered by
   Rows with an unknown office, no question, no answer, or a question longer
   than 255 characters are skipped and counted by reason, never fatal
 - anonymises every question and answer, in both languages, before storing it
-- fills the English answer, which the sheet does not have, with the Italian
-  one, so English readers get an answer rather than an empty page; a missing
-  English question falls back to the Italian one the same way. Translations
-  are done in the admin
+- fills a missing English answer with the Italian one, so English readers get
+  an answer rather than an empty page; a missing English question falls back
+  to the Italian one the same way. Translations are done in the admin
 - creates FAQs **unpublished**: the text is about to go on a public endpoint
   and name detection is heuristic, so someone reads it in the admin first.
   `--publish` skips that review
 - is idempotent: `(office_code, question_it)` is the natural key, so a re-run
-  updates the FAQs it finds instead of duplicating them. The Italian answer and
-  the English question follow the sheet; an English answer is replaced only
-  while it is still the untranslated copy; publication is never touched
+  updates the FAQs it finds instead of duplicating them. The answers and the
+  English question follow the sheet; when the sheet has no English answer, the
+  stored one is replaced only while it is still the untranslated copy;
+  publication is never touched
 - runs in one transaction, and prints how many FAQs were created, updated,
   left unchanged and skipped
 
-Most rows of the current export have no answer yet, so they are skipped: fill
-the `Risposta` column and run the command again.
+After an import, the FAQs published in the admin are indexed for semantic
+search one by one as they are saved.
 
 ### Anonymisation
 

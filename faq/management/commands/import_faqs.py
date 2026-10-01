@@ -1,9 +1,10 @@
 """Seed the FAQ knowledge base from the helpdesk's spreadsheet.
 
 The sheet is the phone helpdesk's log, one question per row, with the columns
-``Ufficio | Office | Domanda | Question | Risposta`` (office in Italian and
-English, question in Italian and English, answer in Italian only). Columns are
-found by their heading, so their order does not matter.
+``Ufficio | Office | Domanda | Question | Risposta | Answer`` (office,
+question and answer, each in Italian and English). ``Question`` and ``Answer``
+are optional. Columns are found by their heading, so their order does not
+matter.
 
 What happens to each row:
 
@@ -12,18 +13,18 @@ What happens to each row:
   question or an answer. Skipped rows are counted by reason, never fatal
 - every text is anonymised (``faq.anonymisation``) before it is stored or
   compared, so personal data never reaches the database
-- the sheet has no English answer, so the Italian one stands in for it until
-  someone translates it in the admin; a missing English question falls back to
-  the Italian one the same way
+- a missing English answer is replaced by the Italian one until someone
+  translates it in the admin; a missing English question falls back to the
+  Italian one the same way
 - new FAQs are created unpublished, because the anonymisation of names is a
   heuristic and the text is about to be shown on a public endpoint: someone
   reads them in the admin first. ``--publish`` skips that review
 
 The import is idempotent. ``(office_code, question_it)`` is the natural key
 (see ``Faq.Meta``), so running it again updates the FAQs it finds instead of
-duplicating them: the Italian answer and the English question follow the
-sheet, while an English answer is replaced only while it is still the
-untranslated copy, and whether a FAQ is published is never touched. The whole
+duplicating them: the answers and the English question follow the sheet. When
+the sheet has no English answer, the stored one is replaced only while it is
+still the untranslated copy. Whether a FAQ is published is never touched. The whole
 run is one transaction: a failure halfway stores nothing.
 """
 
@@ -159,6 +160,7 @@ def import_row(row, publish):
     question_it = anonymise(row["domanda"])
     question_en = anonymise(row.get("question", "")) or question_it
     answer_it = anonymise(row["risposta"])
+    sheet_answer_en = anonymise(row.get("answer", ""))
     if max(len(question_it), len(question_en)) > QUESTION_MAX_LENGTH:
         raise SkippedRow(f"question longer than {QUESTION_MAX_LENGTH} characters")
 
@@ -169,14 +171,19 @@ def import_row(row, publish):
             question_it=question_it,
             question_en=question_en,
             answer_it=answer_it,
-            answer_en=answer_it,
+            answer_en=sheet_answer_en or answer_it,
             is_active=publish,
         )
         return "created"
 
-    # An English answer that differs from the Italian one was written by
-    # someone in the admin: the sheet has nothing better to replace it with.
-    answer_en = answer_it if faq.answer_en == faq.answer_it else faq.answer_en
+    if sheet_answer_en:
+        answer_en = sheet_answer_en
+    elif faq.answer_en == faq.answer_it:
+        answer_en = answer_it
+    else:
+        # An English answer that differs from the Italian one was written by
+        # someone in the admin: the sheet has nothing better to replace it with.
+        answer_en = faq.answer_en
     changes = {
         "question_en": question_en,
         "answer_it": answer_it,

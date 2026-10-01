@@ -1,7 +1,8 @@
 """Tests for the ``import_faqs`` management command.
 
 Each test writes a small workbook of invented rows to ``tmp_path``, laid out
-like the helpdesk export: ``Ufficio | Office | Domanda | Question | Risposta``.
+like the helpdesk export: ``Ufficio | Office | Domanda | Question | Risposta``,
+plus ``Answer`` in the tests about the English answer.
 """
 
 from io import StringIO
@@ -15,6 +16,7 @@ from faq.models import Faq
 from pronto.enums import OfficeCode
 
 HEADER = ("Ufficio", "Office", "Domanda", "Question", "Risposta")
+BILINGUAL_HEADER = (*HEADER, "Answer")
 
 ENROLMENT = (
     "Segreteria",
@@ -105,6 +107,53 @@ def test_the_italian_answer_stands_in_for_the_missing_english_one(workbook):
 
     stored = Faq.objects.get(question_it="Come mi iscrivo?")
     assert stored.answer_en == stored.answer_it
+
+
+@pytest.mark.django_db
+def test_the_english_answer_is_read_from_the_sheet(tmp_path):
+    path = write_workbook(
+        tmp_path / "f.xlsx",
+        (*ENROLMENT, "From Studenti Online."),
+        header=BILINGUAL_HEADER,
+    )
+
+    run(path)
+
+    stored = Faq.objects.get()
+    assert stored.answer_it == "Da Studenti Online."
+    assert stored.answer_en == "From Studenti Online."
+
+
+@pytest.mark.django_db
+def test_the_italian_answer_stands_in_for_an_empty_english_cell(tmp_path):
+    path = write_workbook(
+        tmp_path / "f.xlsx",
+        (*ENROLMENT, None),
+        (*ERASMUS, "In February."),
+        header=BILINGUAL_HEADER,
+    )
+
+    run(path)
+
+    assert Faq.objects.get(question_it="Come mi iscrivo?").answer_en == (
+        "Da Studenti Online."
+    )
+    assert Faq.objects.get(question_it="Quando esce il bando Erasmus?").answer_en == (
+        "In February."
+    )
+
+
+@pytest.mark.django_db
+def test_the_english_answer_is_anonymised(tmp_path):
+    path = write_workbook(
+        tmp_path / "f.xlsx",
+        (*ENROLMENT, "Call 333 1234567 or write to mario.rossi@studio.unibo.it."),
+        header=BILINGUAL_HEADER,
+    )
+
+    run(path)
+
+    assert Faq.objects.get().answer_en == "Call [PHONE] or write to [EMAIL]."
 
 
 @pytest.mark.django_db
@@ -218,6 +267,63 @@ def test_running_again_keeps_an_english_answer_written_in_the_admin(tmp_path, wo
     stored = Faq.objects.get(question_it="Come mi iscrivo?")
     assert stored.answer_it == "Da Studenti Online, entro settembre."
     assert stored.answer_en == "From Studenti Online."
+
+
+@pytest.mark.django_db
+def test_running_again_keeps_it_when_the_english_cell_is_empty(tmp_path, workbook):
+    run(workbook)
+    Faq.objects.filter(question_it="Come mi iscrivo?").update(
+        answer_en="From Studenti Online."
+    )
+
+    run(
+        write_workbook(
+            tmp_path / "v2.xlsx", (*ENROLMENT, None), header=BILINGUAL_HEADER
+        )
+    )
+
+    assert (
+        Faq.objects.get(question_it="Come mi iscrivo?").answer_en
+        == "From Studenti Online."
+    )
+
+
+@pytest.mark.django_db
+def test_a_changed_english_answer_updates_the_existing_faq(tmp_path):
+    original = (*ENROLMENT, "From Studenti Online.")
+    run(write_workbook(tmp_path / "v1.xlsx", original, header=BILINGUAL_HEADER))
+    changed = (*ENROLMENT, "From Studenti Online, by September.")
+
+    output = run(write_workbook(tmp_path / "v2.xlsx", changed, header=BILINGUAL_HEADER))
+
+    stored = Faq.objects.get()
+    assert stored.answer_en == "From Studenti Online, by September."
+    assert "Updated: 1" in output
+
+
+@pytest.mark.django_db
+def test_the_english_answer_in_the_sheet_replaces_the_one_in_the_admin(
+    tmp_path, workbook
+):
+    # The sheet is the source of truth for both answers, as it already is for
+    # the Italian one: an edit made in the admin lasts until the next import.
+    run(workbook)
+    Faq.objects.filter(question_it="Come mi iscrivo?").update(
+        answer_en="Written in the admin."
+    )
+
+    run(
+        write_workbook(
+            tmp_path / "v2.xlsx",
+            (*ENROLMENT, "From Studenti Online."),
+            header=BILINGUAL_HEADER,
+        )
+    )
+
+    assert (
+        Faq.objects.get(question_it="Come mi iscrivo?").answer_en
+        == "From Studenti Online."
+    )
 
 
 @pytest.mark.django_db

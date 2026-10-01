@@ -2,6 +2,7 @@
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 
@@ -40,6 +41,40 @@ def test_login_with_valid_credentials_returns_a_token(client, user):
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["token"] == Token.objects.get(user=user).key
+
+
+@pytest.mark.django_db
+def test_login_records_the_time_of_the_login(client, user):
+    assert user.last_login is None
+    before = timezone.now()
+
+    client.post(LOGIN_URL, {"email": user.email, "password": PASSWORD}, format="json")
+
+    user.refresh_from_db()
+    assert before <= user.last_login <= timezone.now()
+
+
+@pytest.mark.django_db
+def test_every_login_updates_the_last_login(client, user):
+    credentials = {"email": user.email, "password": PASSWORD}
+    client.post(LOGIN_URL, credentials, format="json")
+    user.refresh_from_db()
+    first = user.last_login
+
+    client.post(LOGIN_URL, credentials, format="json")
+
+    user.refresh_from_db()
+    assert user.last_login > first
+
+
+@pytest.mark.django_db
+def test_a_failed_login_records_nothing(client, user):
+    client.post(
+        LOGIN_URL, {"email": user.email, "password": "wrong-passphrase"}, format="json"
+    )
+
+    user.refresh_from_db()
+    assert user.last_login is None
 
 
 @pytest.mark.django_db

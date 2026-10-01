@@ -23,6 +23,7 @@ It also holds the one hook every test file relies on: tests marked
 """
 
 from datetime import datetime, time, timedelta
+from itertools import count
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -31,6 +32,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
+from accounts.models import StudentProfile
 from booking.models import EmployeeProfile, Shift
 from offices.models import Office
 from offices.seed import seed_office
@@ -73,11 +75,38 @@ def slot_at(day, hour, minute=0):
     return timezone.make_aware(datetime.combine(day, time(hour, minute)))
 
 
+# Matricole for the students a test does not give one: unique, and well formed.
+matricole = (f"{n:010d}" for n in count(1))
+
+
 def make_user(email, role, **fields):
-    """An active user; `fields` sets anything else, such as the names."""
-    return User.objects.create_user(
+    """An active user; `fields` sets anything else, such as the names.
+
+    Every user has a first and a last name: unless given, they are read off
+    the address, "mario.rossi@" being Mario Rossi. A student also gets the
+    student profile registration would have given them, from the `matricola`
+    and `degree_programme` in `fields`, or made up.
+    """
+    first, _, last = email.split("@")[0].partition(".")
+    fields.setdefault("first_name", first.capitalize())
+    fields.setdefault("last_name", last.capitalize() or "Test")
+    student = {
+        key: fields.pop(key)
+        for key in ("matricola", "degree_programme")
+        if key in fields
+    }
+    user = User.objects.create_user(
         email=email, password=PASSWORD, role=role, is_active=True, **fields
     )
+    if role == User.Role.STUDENT:
+        StudentProfile.objects.create(
+            user=user,
+            matricola=student.get("matricola") or next(matricole),
+            degree_programme=student.get(
+                "degree_programme", "Ingegneria e scienze informatiche"
+            ),
+        )
+    return user
 
 
 def make_employee(office, email="anna.bianchi@unibo.it", shifts=WORKING_WEEK):

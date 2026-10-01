@@ -1,8 +1,12 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm
+from django.core.exceptions import ValidationError
+from django.forms.models import BaseInlineFormSet
 
-from .models import User
+from pronto.enums import Role
+
+from .models import StudentProfile, User
 
 
 class UserCreationFormWithoutUsername(AdminUserCreationForm):
@@ -20,9 +24,46 @@ class UserCreationFormWithoutUsername(AdminUserCreationForm):
             "role",
             "first_name",
             "last_name",
-            "matricola",
-            "degree_programme",
         )
+
+
+class StudentProfileFormSet(BaseInlineFormSet):
+    """Asks a student for their profile, and refuses one to anybody else.
+
+    Checked here rather than left to `StudentProfile.clean()`: the inline's
+    profile only gets its user when saved, so its own check cannot see the
+    role. This one reads it from the user as edited on the same page.
+    """
+
+    def clean(self):
+        super().clean()
+        kept = [
+            form
+            for form in self.forms
+            if form.cleaned_data and not form.cleaned_data.get("DELETE")
+        ]
+        if self.instance.role == Role.STUDENT and not kept:
+            raise ValidationError("A student needs a matricola and a degree programme.")
+        if self.instance.role != Role.STUDENT and kept:
+            raise ValidationError("Only students have a student profile.")
+
+
+class StudentProfileInline(admin.StackedInline):
+    """The student data, edited on the user's own page.
+
+    One at most: Django caps the inline at one form, the relation being
+    one-to-one.
+    """
+
+    model = StudentProfile
+    formset = StudentProfileFormSet
+
+    def get_extra(self, request, obj=None, **kwargs):
+        # No empty profile form on the page of an employee or an admin; one
+        # can still be added, and is then refused unless the role changes too.
+        if obj is not None and obj.role != Role.STUDENT:
+            return 0
+        return 1
 
 
 @admin.register(User)
@@ -32,17 +73,23 @@ class UserAdmin(DjangoUserAdmin):
     """
 
     add_form = UserCreationFormWithoutUsername
+    inlines = [StudentProfileInline]
 
     list_display = ["email", "last_name", "first_name", "role", "is_active", "is_staff"]
     list_filter = ["role", "is_active", "is_staff"]
-    search_fields = ["email", "last_name", "first_name", "matricola"]
+    search_fields = [
+        "email",
+        "last_name",
+        "first_name",
+        "student_profile__matricola",
+    ]
     ordering = ["email"]
 
     fieldsets = [
         (None, {"fields": ("email", "password")}),
         (
             "Anagrafica",
-            {"fields": ("first_name", "last_name", "matricola", "degree_programme")},
+            {"fields": ("first_name", "last_name")},
         ),
         (
             "Ruolo e permessi",
@@ -69,8 +116,6 @@ class UserAdmin(DjangoUserAdmin):
                     "role",
                     "first_name",
                     "last_name",
-                    "matricola",
-                    "degree_programme",
                     "usable_password",
                     "password1",
                     "password2",

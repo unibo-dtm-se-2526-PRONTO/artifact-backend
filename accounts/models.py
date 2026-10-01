@@ -1,7 +1,9 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from pronto.enums import Role
 
@@ -20,6 +22,9 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+        # The names are required of a superuser too: createsuperuser asks for
+        # them, as REQUIRED_FIELDS, and the database refuses an empty one.
+        #
         # Forced, not defaulted: the model starts accounts inactive, waiting for
         # the emailed verification link. A superuser has no mailbox to verify, so
         # without this override createsuperuser would produce an account that
@@ -38,8 +43,7 @@ class UserManager(BaseUserManager):
 matricola_validator = RegexValidator(
     r"^[0-9]{6,10}$", "A matricola is a number of 6 to 10 digits."
 )
-# Given both to the field, which is what the API reports, and to the
-# constraint, which is what the admin reports.
+# Given to the field, which the API and the admin both report.
 MATRICOLA_TAKEN = "A student with this matricola is already registered."
 
 
@@ -62,25 +66,11 @@ class User(AbstractUser):
         verbose_name="ruolo",
         help_text="Derivato dal dominio dell'indirizzo email in fase di registrazione.",
     )
-    # Students only, and required of them. Blank by default, and not NULL, so
-    # the accounts that predate these columns, employees and admins included,
-    # stay valid rows; clean() enforces them by role.
-    matricola = models.CharField(
-        max_length=10,
-        blank=True,
-        default="",
-        validators=[matricola_validator],
-        error_messages={"unique": MATRICOLA_TAKEN},
-        verbose_name="matricola",
-        help_text="Solo per gli studenti: il numero di matricola Unibo, da 6 a 10 cifre.",
-    )
-    degree_programme = models.CharField(
-        max_length=200,
-        blank=True,
-        default="",
-        verbose_name="corso di studi",
-        help_text="Solo per gli studenti: il corso di laurea a cui sono iscritti.",
-    )
+    # Required of everybody, admins included: AbstractUser leaves both
+    # optional. Its verbose names are kept, translations and all: the password
+    # validators quote them when a password is too similar to a name.
+    first_name = models.CharField(_("first name"), max_length=150)
+    last_name = models.CharField(_("last name"), max_length=150)
     is_active = models.BooleanField(
         default=False,
         verbose_name="attivo",
@@ -90,9 +80,9 @@ class User(AbstractUser):
     )
 
     USERNAME_FIELD = "email"
-    # Empty on purpose: createsuperuser has nothing left to ask for, since the
-    # manager assigns the role itself.
-    REQUIRED_FIELDS: list[str] = []
+    # What createsuperuser asks for besides the email and the password. Not
+    # the role: the manager assigns it itself.
+    REQUIRED_FIELDS = ["first_name", "last_name"]
 
     objects = UserManager()
 
@@ -100,38 +90,86 @@ class User(AbstractUser):
         verbose_name = "utente"
         verbose_name_plural = "utenti"
         constraints = [
-            # Unique among the matricole actually given: everybody who is not a
-            # student has an empty one.
-            models.UniqueConstraint(
-                fields=["matricola"],
-                condition=~models.Q(matricola=""),
-                name="unique_matricola",
-                violation_error_message=MATRICOLA_TAKEN,
+            # Required fields still accept "" when saved from code, since only
+            # full_clean() checks for blanks; these make the database refuse
+            # it too.
+            models.CheckConstraint(
+                condition=~models.Q(first_name=""),
+                name="user_first_name_not_empty",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(last_name=""),
+                name="user_last_name_not_empty",
             ),
         ]
 
     def __str__(self):
         return self.email
 
-    def clean(self):
-        """Check the personal data a user of this role has to give.
 
-        In ``clean()`` rather than on the fields: what is required depends on
-        the role, and an admin, created from the command line, has none of it.
-        The columns stay blank-able so the accounts that predate them are still
-        valid rows; this is what registration and the admin forms enforce.
-        """
+class StudentProfile(models.Model):
+    """What only a student has: their matricola and degree programme.
+
+    The counterpart of `booking.EmployeeProfile`, which holds what only an
+    employee has. A table of its own rather than columns on `User`, which every
+    employee and admin would leave empty. Unlike the employee's, this profile
+    belongs to `accounts`: it is personal data given at registration, not
+    something the booking slice assigns.
+
+    The invariant the schema does *not* enforce: a user has a student profile
+    if and only if their role is ``STUDENT``. A constraint across the two
+    tables, depending on a column of the other one, is not something Django
+    can express portably. Registration creates the user and the profile in one
+    transaction, `clean()` refuses a profile for anyone else, and the admin
+    applies both halves of the rule on the user's page. Anything writing users outside those
+    paths — a data migration, a fixture, the shell — has to uphold it itself.
+    """
+
+    # The user's own key, not a column of its own: a profile is part of the
+    # user, never reassigned, and there is at most one.
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="student_profile",
+        verbose_name="utente",
+    )
+    matricola = models.CharField(
+        max_length=10,
+        unique=True,
+        validators=[matricola_validator],
+        error_messages={"unique": MATRICOLA_TAKEN},
+        verbose_name="matricola",
+        help_text="Il numero di matricola Unibo, da 6 a 10 cifre.",
+    )
+    degree_programme = models.CharField(
+        max_length=200,
+        verbose_name="corso di studi",
+        help_text="Il corso di laurea a cui lo studente è iscritto.",
+    )
+
+    class Meta:
+        verbose_name = "profilo studente"
+        verbose_name_plural = "profili studenti"
+        constraints = [
+            # As for the user's names.
+            models.CheckConstraint(
+                condition=~models.Q(matricola=""),
+                name="student_profile_matricola_not_empty",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(degree_programme=""),
+                name="student_profile_degree_programme_not_empty",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} ({self.matricola})"
+
+    def clean(self):
         super().clean()
-        errors = {}
-        if self.role in (Role.STUDENT, Role.EMPLOYEE):
-            for field in ("first_name", "last_name"):
-                if not getattr(self, field).strip():
-                    errors[field] = "This field is required."
-        for field in ("matricola", "degree_programme"):
-            given = bool(getattr(self, field).strip())
-            if self.role == Role.STUDENT and not given:
-                errors[field] = "This field is required."
-            elif self.role != Role.STUDENT and given:
-                errors[field] = "Only students have this field."
-        if errors:
-            raise ValidationError(errors)
+        # getattr: a profile being built may have no user yet. The admin's
+        # inline is one, and checks the role itself.
+        user = getattr(self, "user", None)
+        if user is not None and user.role != Role.STUDENT:
+            raise ValidationError("Only students have a student profile.")

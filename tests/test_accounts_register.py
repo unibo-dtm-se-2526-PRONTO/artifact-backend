@@ -3,9 +3,12 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import get_hasher, identify_hasher
+from django.db import IntegrityError
 from rest_framework import status
+from rest_framework.validators import UniqueValidator
 
-from tests.conftest import PASSWORD
+from accounts.models import StudentProfile
+from tests.conftest import PASSWORD, make_user
 
 User = get_user_model()
 
@@ -248,9 +251,9 @@ def test_a_student_is_registered_with_matricola_and_degree_programme(client):
     response = client.post(URL, STUDENT, format="json")
 
     assert response.status_code == status.HTTP_201_CREATED
-    user = User.objects.get()
-    assert user.matricola == "0001012345"
-    assert user.degree_programme == "Ingegneria e scienze informatiche"
+    profile = User.objects.get().student_profile
+    assert profile.matricola == "0001012345"
+    assert profile.degree_programme == "Ingegneria e scienze informatiche"
 
 
 @pytest.mark.django_db
@@ -295,7 +298,7 @@ def test_a_numeric_matricola_of_six_to_ten_digits_is_accepted(client, matricola)
     response = client.post(URL, {**STUDENT, "matricola": matricola}, format="json")
 
     assert response.status_code == status.HTTP_201_CREATED
-    assert User.objects.get().matricola == matricola
+    assert User.objects.get().student_profile.matricola == matricola
 
 
 @pytest.mark.django_db
@@ -347,8 +350,26 @@ def test_an_employee_is_registered_without_student_data(client):
     )
 
     assert response.status_code == status.HTTP_201_CREATED
-    user = User.objects.get()
-    assert (user.matricola, user.degree_programme) == ("", "")
+    assert response.json()["matricola"] == response.json()["degree_programme"] == ""
+    # Not even an empty one: nobody but a student has a student profile.
+    assert User.objects.exists()
+    assert not StudentProfile.objects.exists()
+
+
+@pytest.mark.django_db
+def test_a_student_whose_profile_cannot_be_saved_is_not_registered(client, monkeypatch):
+    # Two sign-ups with the same matricola at once: both pass the uniqueness
+    # check, and the second insert of the profile fails. Simulated by turning
+    # the check off. The user created just before must go with it, or a
+    # student without a profile would be left behind.
+    make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT, matricola="0001012345")
+    monkeypatch.setattr(UniqueValidator, "__call__", lambda *args: None)
+
+    with pytest.raises(IntegrityError):
+        client.post(URL, STUDENT, format="json")
+
+    assert not User.objects.filter(email=STUDENT["email"]).exists()
+    assert StudentProfile.objects.count() == 1
 
 
 # Passwords (NFR3)

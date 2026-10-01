@@ -1,3 +1,4 @@
+from django.contrib.auth.signals import user_logged_in
 from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
@@ -41,7 +42,13 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        token, _ = Token.objects.get_or_create(user=serializer.validated_data["user"])
+        user = serializer.validated_data["user"]
+        token, _ = Token.objects.get_or_create(user=user)
+        # Sent by django.contrib.auth.login() for a session login, which this
+        # view does not open. Sending it here runs the same receivers, among
+        # them Django's own update_last_login, so last_login records token
+        # logins too: NULL means the user has never logged in.
+        user_logged_in.send(sender=user.__class__, request=request, user=user)
         return Response({"token": token.key}, status=status.HTTP_200_OK)
 
 

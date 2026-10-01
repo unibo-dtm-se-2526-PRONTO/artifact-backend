@@ -23,7 +23,11 @@ def verification_path(user):
 @pytest.fixture
 def user(db):
     return User.objects.create_user(
-        email="mario.rossi@studio.unibo.it", password=PASSWORD, role=User.Role.STUDENT
+        email="mario.rossi@studio.unibo.it",
+        password=PASSWORD,
+        role=User.Role.STUDENT,
+        first_name="Mario",
+        last_name="Rossi",
     )
 
 

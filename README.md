@@ -134,8 +134,9 @@ tests, two offices, their staff, a student, their authenticated clients, and a
 Monday to Friday, 9 to 17, unless a test passes other `shifts` to
 `make_employee`. For the accounts and FAQ tests, an anonymous `client` (DRF's
 `APIClient`, replacing pytest-django's fixture of the same name), the
-`PASSWORD` every test user is given, `authenticate(user)`, which returns a
-client carrying that user's token, and `office_for(code)`, the office a FAQ or
+`PASSWORD` every test user is given, `make_user`, which names every user it
+makes and gives a student the student profile registration would,
+`authenticate(user)`, which returns a client carrying that user's token, and `office_for(code)`, the office a FAQ or
 a question is filed under, created as `seed_offices` would if missing. Fixtures stay local to a file while one file
 owns them; they move to `conftest.py` once a second file needs them.
 
@@ -245,7 +246,7 @@ question is written in, and an inquiry is always read back in that language.
 
 | App | What it owns |
 |-----|--------------|
-| `accounts` | the user model, registration, login and e-mail verification |
+| `accounts` | the user model and the student profiles, registration, login and e-mail verification |
 | `offices` | the helpdesk offices and `seed_offices` |
 | `faq` | the FAQs, the questions students ask (`Inquiry`), matching and the import |
 | `booking` | employee profiles, shifts and appointments, and the office endpoints |
@@ -566,9 +567,8 @@ Any other domain is rejected with `400`.
 ### Personal data
 
 Registration asks for different data depending on the role the email domain
-grants (FR1, FR2). The rules live in `User.clean()`, so the API and the admin
-forms apply the same ones; `RegisterSerializer` derives the role first and
-then runs them.
+grants (FR1, FR2). `RegisterSerializer` derives the role first and then
+applies the rules below; the admin applies the same ones.
 
 | Field | Student | Employee |
 |-------|---------|----------|
@@ -588,11 +588,9 @@ then runs them.
   are accepted. The employee's office is not part of registration: it is
   chosen afterwards through `POST /api/employee-profile/` (see
   [Shifts](#shifts)).
-- **Admins**, created with `createsuperuser`, need none of this.
-
-The columns are blank-able in the database, with `""` as the default, so the
-accounts created before they existed are still valid rows; the admin asks for
-the missing data the next time such an account is edited.
+- **Admins**, created with `createsuperuser`, have no student data, but need a
+  first and a last name like everybody else: the command asks for them
+  (`--first_name` and `--last_name` with `--noinput`).
 
 `POST /api/auth/register/`, a student:
 
@@ -627,6 +625,51 @@ For an employee, `matricola` and `degree_programme` are `""`. A validation
 error is a `400` keyed by field, e.g. `{"matricola": ["A matricola is a number
 of 6 to 10 digits."]}`.
 
+### Data model
+
+The user table holds what every user has, and nothing that is empty for a
+whole role: every column is `NOT NULL`, and the names cannot be `""` either,
+which a check constraint enforces on top of the forms and the API. The one
+exception is `last_login`, `NULL` until the user first logs in (see below).
+
+What only some users have lives in a profile, one-to-one with the user:
+
+| Table | Who has one | Holds | App |
+|-------|-------------|-------|-----|
+| `accounts_studentprofile` | every student, nobody else | `matricola` (unique), `degree_programme` | `accounts` |
+| `booking_employeeprofile` | employees, once they choose an office | `office` | `booking` |
+
+`StudentProfile` follows the pattern of `EmployeeProfile`, with two
+differences. Its primary key is the user's own, since a profile is part of
+the user and never moves to another one. And it belongs to `accounts`, being
+personal data given at registration, while the office an employee works for
+is the booking slice's business. Both columns are required and refuse `""`
+in the database too; the matricola is unique.
+
+"A student has a student profile, and nobody else does" is the invariant the
+schema cannot express: a constraint would have to span both tables. It is
+upheld where users are written:
+
+- registration creates the user and the profile in one transaction, so a
+  profile that fails to save takes the user with it
+- the admin edits the profile inline on the user's page, asks a student for
+  one, and refuses one to anybody else
+- anything else writing users — a migration, a fixture, the shell — has to
+  uphold it itself, as for the invariant of `Appointment`
+
+The API does not show the split: registration takes `matricola` and
+`degree_programme` alongside the rest, and `/api/auth/me/` returns them, `""`
+for anybody without a profile.
+
+The student data used to be two blank-able columns of the user table. The
+migrations `accounts.0004`–`0006` moved each student's values to a profile and
+dropped the columns; they stop, listing the accounts, if a student lacks
+either value or someone else has one, rather than inventing or losing data.
+`0007` likewise stops on users without a name before adding the constraints.
+Both can be reversed.
+
+In the admin, users can still be searched by matricola.
+
 ### Passwords and tokens
 
 - Passwords are stored only as salted hashes, by Django's default hasher
@@ -642,3 +685,9 @@ of 6 to 10 digits."]}`.
   the user logs out, which deletes it. Only the e-mail verification link is a
   signed token with a lifetime (Django's `default_token_generator`, valid for
   `PASSWORD_RESET_TIMEOUT`, three days by default).
+- A login through `POST /api/auth/login/` records `last_login`. The view sends
+  Django's `user_logged_in` signal, as a session login would, and Django's own
+  receiver updates the column; a `NULL` means the user has never logged in.
+  Since the verification token is derived from `last_login`, a verification
+  link stops working once its account has logged in, which it can only do
+  after the link was opened.

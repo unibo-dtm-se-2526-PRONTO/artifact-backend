@@ -18,6 +18,21 @@ services:
       timeout: 5s
       retries: 15
 
+  # The vector store of semantic FAQ matching (faq/vector_index.py). Same
+  # version as the chromadb client in poetry.lock: bump them together.
+  chroma:
+    image: chromadb/chroma:1.5.9
+    ports:
+      - "127.0.0.1:${CHROMA_HOST_PORT:-8001}:8000"
+    volumes:
+      - chromadata:/data
+    healthcheck:
+      # The image has neither curl nor wget: bash can open the port itself.
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
   backend:
     build: .
     ports:
@@ -34,11 +49,21 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       DB_SSLMODE: disable
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      # The embedding model is downloaded on first use; a volume keeps it
+      # across restarts.
+      FASTEMBED_CACHE_PATH: /fastembed
     depends_on:
       db:
         condition: service_healthy
+      chroma:
+        condition: service_healthy
     volumes:
       - .:/app
+      - fastembed:/fastembed
 
 volumes:
   pgdata:
+  chromadata:
+  fastembed:

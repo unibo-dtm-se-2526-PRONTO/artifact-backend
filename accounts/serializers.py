@@ -1,10 +1,17 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
+from .models import MATRICOLA_TAKEN, StudentProfile, matricola_validator
+
 User = get_user_model()
+
+# Sent and returned alongside the user's own fields, but stored in the
+# student's `StudentProfile`.
+STUDENT_FIELDS = ("matricola", "degree_programme")
 
 # Institutional email domains, and the role each one grants.
 ROLE_BY_EMAIL_DOMAIN = {
@@ -34,6 +41,30 @@ class RegisterSerializer(serializers.ModelSerializer):
         validators=[UniqueValidator(queryset=User.objects.all())]
     )
     password = serializers.CharField(write_only=True)
+    # Not columns of User, so declared here. Optional, and blank-able, for
+    # everybody: whether they are required or refused depends on the role,
+    # which validate() derives. The validators are the ones a field generated
+    # from the user's old columns had, in the same order, so the errors read
+    # the same.
+    matricola = serializers.CharField(
+        max_length=10,
+        required=False,
+        allow_blank=True,
+        validators=[
+            matricola_validator,
+            UniqueValidator(
+                queryset=StudentProfile.objects.all(), message=MATRICOLA_TAKEN
+            ),
+        ],
+        help_text="Solo per gli studenti: il numero di matricola Unibo, da 6 a 10 cifre.",
+    )
+    degree_programme = serializers.CharField(
+        max_length=200,
+        required=False,
+        allow_blank=True,
+        label="Corso di studi",
+        help_text="Solo per gli studenti: il corso di laurea a cui sono iscritti.",
+    )
 
     class Meta:
         model = User
@@ -49,9 +80,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "role"]
         # Blank-able on the model, for the accounts that predate them, but
-        # mandatory for anyone signing up. The student data stays optional
-        # here: whether it is required or refused depends on the role, which
-        # validate() derives and checks through the model's clean().
+        # mandatory for anyone signing up.
         extra_kwargs = {
             "first_name": {"required": True, "allow_blank": False},
             "last_name": {"required": True, "allow_blank": False},
@@ -70,13 +99,18 @@ class RegisterSerializer(serializers.ModelSerializer):
         # institutional and the role can be derived here, where the checks
         # that depend on it run.
         attrs["role"] = ROLE_BY_EMAIL_DOMAIN[attrs["email"].rsplit("@", 1)[-1]]
-        profile = {key: value for key, value in attrs.items() if key != "password"}
-        candidate = User(**profile)
+        account = {
+            key: value
+            for key, value in attrs.items()
+            if key != "password" and key not in STUDENT_FIELDS
+        }
+        candidate = User(**account)
         errors = {}
         try:
             candidate.clean()
         except DjangoValidationError as error:
             errors.update(error.message_dict)
+        errors.update(self.student_data_errors(attrs))
         # Validated here rather than as a field validator: the similarity check
         # needs the user the password belongs to — their email and names —
         # which a field validator lacks.
@@ -88,8 +122,35 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(errors)
         return attrs
 
+    @staticmethod
+    def student_data_errors(attrs):
+        """Required of a student, refused from anyone else.
+
+        Refused rather than dropped: an employee sending a matricola has most
+        likely typed the wrong address, and ignoring it would hide that.
+        """
+        errors = {}
+        for field in STUDENT_FIELDS:
+            given = bool(attrs.get(field, "").strip())
+            if attrs["role"] == User.Role.STUDENT and not given:
+                errors[field] = ["This field is required."]
+            elif attrs["role"] != User.Role.STUDENT and given:
+                errors[field] = ["Only students have this field."]
+        return errors
+
     def create(self, validated_data):
-        return User.objects.create_user(**validated_data)
+        student = {field: validated_data.pop(field, "") for field in STUDENT_FIELDS}
+        # One transaction: a student whose profile cannot be written must not
+        # be left behind as an account without one.
+        with transaction.atomic():
+            user = User.objects.create_user(**validated_data)
+            if user.role == User.Role.STUDENT:
+                StudentProfile.objects.create(user=user, **student)
+        return user
+
+    def to_representation(self, instance):
+        # The same shape as GET /api/auth/me/, student data included.
+        return UserSerializer(instance, context=self.context).data
 
 
 class LoginSerializer(serializers.Serializer):
@@ -110,7 +171,14 @@ class LoginSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Read-only representation of a user."""
+    """Read-only representation of a user.
+
+    The student data comes from the student profile. Everybody else has none,
+    and gets ``""`` for it, so the shape is the same for every role.
+    """
+
+    matricola = serializers.SerializerMethodField()
+    degree_programme = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -124,3 +192,19 @@ class UserSerializer(serializers.ModelSerializer):
             "degree_programme",
         ]
         read_only_fields = fields
+
+    def get_matricola(self, user) -> str:
+        profile = student_profile_of(user)
+        return profile.matricola if profile else ""
+
+    def get_degree_programme(self, user) -> str:
+        profile = student_profile_of(user)
+        return profile.degree_programme if profile else ""
+
+
+def student_profile_of(user):
+    """The user's student profile, or None if they have none."""
+    try:
+        return user.student_profile
+    except StudentProfile.DoesNotExist:
+        return None

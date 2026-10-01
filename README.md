@@ -161,10 +161,41 @@ the backend runs on in production:
    tests run, and so the only run that reaches the FAQ matching: coverage is
    measured here for that reason. The HTML report is uploaded as a build
    artifact.
-3. **Deploy** — semantic-release, which only releases from `master` (see
+3. **Migrate the Neon database** — on a push to `develop` only, that is when a
+   pull request is merged, and only after both runs above are green: runs
+   `manage.py migrate` against the shared Neon database, so its schema always
+   matches `develop`. See [Automatic migrations](#automatic-migrations).
+4. **Deploy** — semantic-release, which only releases from `master` (see
    below).
 
 A change is green only when both runs pass.
+
+### Automatic migrations
+
+The team works against one shared PostgreSQL on Neon. Every merge into
+`develop` migrates it: the job prints the plan, applies it, then checks nothing
+is left unapplied. Pull requests and other branches never touch it, and two
+merges in a row migrate one after the other.
+
+It needs a GitHub environment named `neon` (Settings → Environments) holding
+the database credentials as secrets — `DB_NAME`, `DB_USER`, `DB_PASSWORD`,
+`DB_HOST`, `DB_PORT`, the same values as a local `.env`. Adding required
+reviewers to that environment makes every migration wait for an approval,
+without changing the workflow.
+
+Only the schema is automated. Loading data — `seed_offices`, `import_faqs` —
+stays a deliberate, manual step: it depends on files and on decisions, such as
+whether imported FAQs are published.
+
+Two consequences to keep in mind:
+
+- **Pull before working against Neon.** Right after a merge the database
+  follows the new `develop`; an older checkout pointed at it may expect
+  columns that are no longer there.
+- **A merged migration reaches the shared data with no further review.** Test
+  it against a copy of real data before merging, keep it reversible where
+  possible, and remember that Neon keeps a point-in-time history from which
+  the database can be restored if a migration goes wrong.
 
 ## Releases
 

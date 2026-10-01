@@ -115,6 +115,62 @@ jobs:
           if-no-files-found: ignore
           overwrite: true
 
+  # Brings the shared Neon database to the schema of develop as soon as a change
+  # lands there, so nobody has to remember to run `migrate` by hand. Only on a
+  # push to develop — a merged pull request — and only once both test runs are
+  # green: a branch or a red build never touches the database the team shares.
+  migrate-neon:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    name: Migrate the Neon database
+    # The credentials live in this environment's secrets. Required reviewers can
+    # be added to it in the repository settings, without touching this file.
+    environment: neon
+    # Two merges in a row migrate one after the other, never at the same time,
+    # and a migration already running is never cancelled halfway.
+    concurrency:
+      group: neon-migrate
+      cancel-in-progress: false
+    env:
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_SSLMODE: require
+      # Django refuses to start without one, but migrate signs nothing, so a
+      # throwaway value does instead of yet another secret.
+      SECRET_KEY: migrate-only-${{ github.run_id }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        # the version pinned in the Dockerfile, the only place it is written
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "poetry==$(sed -n 's/^ARG POETRY_VERSION=//p' Dockerfile)"
+
+      # The runtime dependencies are all migrate needs.
+      - name: Restore Runtime Environment
+        run: poetry install --only main
+
+      # Printed before anything changes, so the log says what was applied.
+      - name: Show the migration plan
+        run: poetry run python manage.py migrate --plan
+
+      - name: Migrate
+        run: poetry run python manage.py migrate --noinput
+
+      - name: Check nothing is left unapplied
+        run: poetry run python manage.py migrate --check
+
   deploy:
     name: Deploy
     permissions:

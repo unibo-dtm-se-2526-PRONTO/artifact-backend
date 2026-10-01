@@ -271,7 +271,7 @@ FAQ_MATCH_MIN_RANK = 0.45
 # points it at its chroma service. Tests never reach a server: the ones about
 # semantic matching give it an in-memory store of their own.
 CHROMA_HOST = os.getenv("CHROMA_HOST", "")
-CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
+CHROMA_PORT = int(os.getenv("CHROMA_PORT") or "8000")
 if "PYTEST_VERSION" in os.environ or "test" in sys.argv:
     CHROMA_HOST = ""
 # Multilingual, so Italian and English questions are embedded equally well. It

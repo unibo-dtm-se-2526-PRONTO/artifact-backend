@@ -273,6 +273,21 @@ def test_rebuilding_reports_an_unreachable_server(store_down):
         call_command("rebuild_faq_index")
 
 
+@pytest.mark.django_db
+def test_a_rebuild_that_fails_halfway_keeps_the_entries_it_had(
+    monkeypatch, vector_store, certificate
+):
+    def model_unavailable(texts):
+        raise OSError("the embedding model could not be downloaded")
+
+    monkeypatch.setattr(vector_index, "embed", model_unavailable)
+
+    with pytest.raises(OSError):
+        vector_index.rebuild()
+
+    assert stored_ids(vector_store) == sorted(vector_index.entry_ids(certificate.pk))
+
+
 # --- the semantic matcher -----------------------------------------------------
 
 

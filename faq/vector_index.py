@@ -94,15 +94,22 @@ def sync_faq(faq_id):
 
 def rebuild():
     """Index every published FAQ again, dropping whatever else is stored.
-    Returns how many FAQs were indexed."""
+    Returns how many FAQs were indexed.
+
+    The new entries are written before the old ones are dropped, so a failure
+    halfway (the model cannot be downloaded, say) leaves the store as it was
+    rather than empty."""
     collection = get_collection()
     if collection is None:
         return 0
-    stale = collection.get(include=[])["ids"]
-    if stale:
-        collection.delete(ids=stale)
     faqs = list(Faq.objects.filter(is_active=True))
     _add(collection, faqs)
+    current = {entry for faq in faqs for entry in entry_ids(faq.pk)}
+    stale = [
+        entry for entry in collection.get(include=[])["ids"] if entry not in current
+    ]
+    if stale:
+        collection.delete(ids=stale)
     return len(faqs)
 
 

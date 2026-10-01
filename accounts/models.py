@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from pronto.enums import Role
 
@@ -21,6 +22,9 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+        # The names are required of a superuser too: createsuperuser asks for
+        # them, as REQUIRED_FIELDS, and the database refuses an empty one.
+        #
         # Forced, not defaulted: the model starts accounts inactive, waiting for
         # the emailed verification link. A superuser has no mailbox to verify, so
         # without this override createsuperuser would produce an account that
@@ -62,6 +66,11 @@ class User(AbstractUser):
         verbose_name="ruolo",
         help_text="Derivato dal dominio dell'indirizzo email in fase di registrazione.",
     )
+    # Required of everybody, admins included: AbstractUser leaves both
+    # optional. Its verbose names are kept, translations and all: the password
+    # validators quote them when a password is too similar to a name.
+    first_name = models.CharField(_("first name"), max_length=150)
+    last_name = models.CharField(_("last name"), max_length=150)
     is_active = models.BooleanField(
         default=False,
         verbose_name="attivo",
@@ -71,34 +80,31 @@ class User(AbstractUser):
     )
 
     USERNAME_FIELD = "email"
-    # Empty on purpose: createsuperuser has nothing left to ask for, since the
-    # manager assigns the role itself.
-    REQUIRED_FIELDS: list[str] = []
+    # What createsuperuser asks for besides the email and the password. Not
+    # the role: the manager assigns it itself.
+    REQUIRED_FIELDS = ["first_name", "last_name"]
 
     objects = UserManager()
 
     class Meta:
         verbose_name = "utente"
         verbose_name_plural = "utenti"
+        constraints = [
+            # Required fields still accept "" when saved from code, since only
+            # full_clean() checks for blanks; these make the database refuse
+            # it too.
+            models.CheckConstraint(
+                condition=~models.Q(first_name=""),
+                name="user_first_name_not_empty",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(last_name=""),
+                name="user_last_name_not_empty",
+            ),
+        ]
 
     def __str__(self):
         return self.email
-
-    def clean(self):
-        """Check the personal data a user of this role has to give.
-
-        In ``clean()`` rather than on the fields: what is required depends on
-        the role, and an admin, created from the command line, has none of it.
-        The student data is not here: it lives in `StudentProfile`.
-        """
-        super().clean()
-        errors = {}
-        if self.role in (Role.STUDENT, Role.EMPLOYEE):
-            for field in ("first_name", "last_name"):
-                if not getattr(self, field).strip():
-                    errors[field] = "This field is required."
-        if errors:
-            raise ValidationError(errors)
 
 
 class StudentProfile(models.Model):
@@ -146,9 +152,7 @@ class StudentProfile(models.Model):
         verbose_name = "profilo studente"
         verbose_name_plural = "profili studenti"
         constraints = [
-            # A required CharField still accepts "" when saved from code, since
-            # only the forms check for blanks; these make the database refuse
-            # it too.
+            # As for the user's names.
             models.CheckConstraint(
                 condition=~models.Q(matricola=""),
                 name="student_profile_matricola_not_empty",

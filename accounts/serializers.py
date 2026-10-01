@@ -79,12 +79,6 @@ class RegisterSerializer(serializers.ModelSerializer):
             "degree_programme",
         ]
         read_only_fields = ["id", "role"]
-        # Blank-able on the model, for the accounts that predate them, but
-        # mandatory for anyone signing up.
-        extra_kwargs = {
-            "first_name": {"required": True, "allow_blank": False},
-            "last_name": {"required": True, "allow_blank": False},
-        }
 
     def validate_email(self, value):
         domain = value.rsplit("@", 1)[-1]
@@ -105,12 +99,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             if key != "password" and key not in STUDENT_FIELDS
         }
         candidate = User(**account)
-        errors = {}
-        try:
-            candidate.clean()
-        except DjangoValidationError as error:
-            errors.update(error.message_dict)
-        errors.update(self.student_data_errors(attrs))
+        errors = self.student_data_errors(attrs)
         # Validated here rather than as a field validator: the similarity check
         # needs the user the password belongs to — their email and names —
         # which a field validator lacks.

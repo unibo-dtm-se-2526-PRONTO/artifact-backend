@@ -82,9 +82,14 @@ matricole = (f"{n:010d}" for n in count(1))
 def make_user(email, role, **fields):
     """An active user; `fields` sets anything else, such as the names.
 
-    A student also gets the student profile registration would have given
-    them, from the `matricola` and `degree_programme` in `fields`, or made up.
+    Every user has a first and a last name: unless given, they are read off
+    the address, "mario.rossi@" being Mario Rossi. A student also gets the
+    student profile registration would have given them, from the `matricola`
+    and `degree_programme` in `fields`, or made up.
     """
+    first, _, last = email.split("@")[0].partition(".")
+    fields.setdefault("first_name", first.capitalize())
+    fields.setdefault("last_name", last.capitalize() or "Test")
     student = {
         key: fields.pop(key)
         for key in ("matricola", "degree_programme")

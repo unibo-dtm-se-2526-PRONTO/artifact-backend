@@ -1,14 +1,19 @@
 """Tests for the custom user model."""
 
+from io import StringIO
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.management import CommandError, call_command
 from django.db import IntegrityError
 
 from accounts.models import StudentProfile
 from tests.conftest import PASSWORD
 
 User = get_user_model()
+
+NAMES = {"first_name": "Mario", "last_name": "Rossi"}
 
 
 def test_user_model_is_the_configured_auth_user_model():
@@ -30,6 +35,7 @@ def test_user_is_created_with_a_role():
         email="mario.rossi@studio.unibo.it",
         password=PASSWORD,
         role=User.Role.STUDENT,
+        **NAMES,
     )
 
     assert user.email == "mario.rossi@studio.unibo.it"
@@ -42,6 +48,7 @@ def test_password_is_hashed_and_not_stored_in_clear_text():
         email="mario.rossi@studio.unibo.it",
         password=PASSWORD,
         role=User.Role.STUDENT,
+        **NAMES,
     )
 
     assert user.password != PASSWORD
@@ -54,6 +61,7 @@ def test_new_user_is_inactive_until_the_email_is_verified():
         email="mario.rossi@studio.unibo.it",
         password=PASSWORD,
         role=User.Role.STUDENT,
+        **NAMES,
     )
 
     assert not user.is_active
@@ -65,6 +73,7 @@ def test_email_is_stored_lowercase():
         email="Mario.Rossi@Studio.Unibo.it",
         password=PASSWORD,
         role=User.Role.STUDENT,
+        **NAMES,
     )
 
     assert user.email == "mario.rossi@studio.unibo.it"
@@ -72,7 +81,9 @@ def test_email_is_stored_lowercase():
 
 @pytest.mark.django_db
 def test_superuser_is_active_and_does_not_need_verification():
-    admin = User.objects.create_superuser(email="admin@unibo.it", password=PASSWORD)
+    admin = User.objects.create_superuser(
+        email="admin@unibo.it", password=PASSWORD, **NAMES
+    )
 
     assert admin.is_active and admin.is_staff and admin.is_superuser
 
@@ -83,6 +94,7 @@ def test_email_must_be_unique():
         email="mario.rossi@studio.unibo.it",
         password=PASSWORD,
         role=User.Role.STUDENT,
+        **NAMES,
     )
 
     with pytest.raises(IntegrityError):
@@ -90,22 +102,79 @@ def test_email_must_be_unique():
             email="mario.rossi@studio.unibo.it",
             password="another-passphrase",
             role=User.Role.STUDENT,
+            **NAMES,
         )
 
 
-@pytest.mark.parametrize("role", ["STUDENT", "EMPLOYEE"])
-def test_students_and_employees_need_a_first_and_last_name(role):
-    user = User(email="someone@unibo.it", role=role)
+# Names
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", ["STUDENT", "EMPLOYEE", "ADMIN"])
+def test_every_user_needs_a_first_and_last_name(role):
+    user = User(email="someone@unibo.it", role=role, password="unusable")
 
     with pytest.raises(ValidationError) as error:
-        user.clean()
+        user.full_clean()
 
-    assert {"first_name", "last_name"} <= set(error.value.message_dict)
+    assert set(error.value.message_dict) == {"first_name", "last_name"}
 
 
-def test_an_admin_needs_no_name():
-    # createsuperuser asks for nothing but the email and the password.
-    User(email="admin@unibo.it", role=User.Role.ADMIN).clean()
+@pytest.mark.django_db
+@pytest.mark.parametrize("field", ["first_name", "last_name"])
+def test_the_database_refuses_an_empty_name(field):
+    # Saved from code, nothing but the database stops it.
+    with pytest.raises(IntegrityError):
+        User.objects.create_user(
+            email="anna.bianchi@unibo.it",
+            password=PASSWORD,
+            role=User.Role.EMPLOYEE,
+            **{**NAMES, field: ""},
+        )
+
+
+@pytest.mark.django_db
+def test_a_superuser_needs_a_name_too():
+    with pytest.raises(IntegrityError):
+        User.objects.create_superuser(email="admin@unibo.it", password=PASSWORD)
+
+
+@pytest.mark.django_db
+def test_createsuperuser_asks_for_the_names(monkeypatch):
+    monkeypatch.setenv("DJANGO_SUPERUSER_PASSWORD", PASSWORD)
+
+    call_command(
+        "createsuperuser",
+        interactive=False,
+        email="admin@unibo.it",
+        first_name="Ada",
+        last_name="Lovelace",
+        stdout=StringIO(),
+    )
+
+    admin = User.objects.get()
+    assert (admin.role, admin.first_name, admin.last_name) == (
+        User.Role.ADMIN,
+        "Ada",
+        "Lovelace",
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("names", [{}, {"first_name": "", "last_name": ""}])
+def test_createsuperuser_refuses_an_admin_without_a_name(monkeypatch, names):
+    monkeypatch.setenv("DJANGO_SUPERUSER_PASSWORD", PASSWORD)
+
+    with pytest.raises(CommandError):
+        call_command(
+            "createsuperuser",
+            interactive=False,
+            email="admin@unibo.it",
+            stdout=StringIO(),
+            **names,
+        )
+
+    assert not User.objects.exists()
 
 
 # Student profile

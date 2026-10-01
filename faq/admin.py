@@ -34,9 +34,10 @@ class InquiryAdmin(admin.ModelAdmin):
         "text",
         "matched_faq",
         "score",
+        "matched_by",
         "resolved",
     ]
-    list_filter = ["office", "language", "resolved"]
+    list_filter = ["office", "language", "matched_by", "resolved"]
     # The office and the FAQ are both shown, and a FAQ is shown with its own
     # office's code: one join for all of them instead of a query per row.
     list_select_related = ["office", "matched_faq__office"]
@@ -49,6 +50,7 @@ class InquiryAdmin(admin.ModelAdmin):
         "language",
         "matched_faq",
         "score",
+        "matched_by",
         "resolved",
         "created_at",
     ]

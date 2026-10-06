@@ -74,14 +74,21 @@ class Inquiry(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     # PROTECT, as for a FAQ: the questions are the record of what students
-    # needed from an office, and deleting the office must not erase it. Not
-    # SET_NULL either, since a question nobody knows the office of says little.
+    # needed from an office, and deleting the office must not erase it.
+    # Nullable because a student need not choose an office: the question is
+    # then filed under the office of the suggested FAQ, or under none.
     office = models.ForeignKey(
         Office,
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name="inquiries",
         verbose_name="ufficio",
-        help_text="L'ufficio scelto dallo studente, anche se la risposta è di un altro.",
+        help_text=(
+            "L'ufficio scelto dallo studente, anche se la risposta è di un altro. "
+            "Se non ne ha scelto uno, quello della FAQ proposta; vuoto se non ne "
+            "è stata trovata una."
+        ),
     )
     text = models.TextField(verbose_name="domanda")
     language = models.CharField(
@@ -126,4 +133,5 @@ class Inquiry(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"[{self.office.code}] {self.text[:60]}"
+        code = self.office.code if self.office else "-"
+        return f"[{code}] {self.text[:60]}"

@@ -51,7 +51,9 @@ class FaqDetailView(PublishedFaqMixin, generics.RetrieveAPIView):
 
 
 class QuestionCreateView(APIView):
-    """Ask a question about an office and get the best-matching FAQ (US2a, US2b).
+    """Ask a question and get the best-matching FAQ (US2a, US2b).
+
+    The office is optional: without one, the FAQs of every office are searched.
 
     Students only, unlike reading the FAQs: a question is recorded, and the
     records are there to show what students need that the FAQs do not cover.
@@ -66,7 +68,7 @@ class QuestionCreateView(APIView):
         serializer = QuestionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         inquiry = ask_question(
-            office=serializer.validated_data["office"],
+            office=serializer.validated_data.get("office"),
             text=serializer.validated_data["question"],
             language=language,
         )

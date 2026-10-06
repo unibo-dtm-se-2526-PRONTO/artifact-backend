@@ -14,13 +14,18 @@ class InquiryError(Exception):
 
 
 def ask_question(office, text, language):
-    """Record a student's question about `office` and the FAQ that best
-    answers it, if any.
+    """Record a student's question and the FAQ that best answers it, if any.
+
+    `office` is the one the student chose, or None. Without one the
+    question is filed under the office of the suggested FAQ, or under none if
+    no FAQ was relevant enough.
 
     The search runs before anything is written, so a database that cannot
     search (see `MatchingUnavailable`) leaves no half-recorded question behind.
     """
-    match = find_best_match(text, office.code, language)
+    match = find_best_match(text, office.code if office else None, language)
+    if office is None and match is not None:
+        office = match.faq.office
     return Inquiry.objects.create(
         office=office,
         text=text,

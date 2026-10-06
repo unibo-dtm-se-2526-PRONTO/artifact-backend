@@ -24,12 +24,6 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         # The names are required of a superuser too: createsuperuser asks for
         # them, as REQUIRED_FIELDS, and the database refuses an empty one.
-        #
-        # Forced, not defaulted: the model starts accounts inactive, waiting for
-        # the emailed verification link. A superuser has no mailbox to verify, so
-        # without this override createsuperuser would produce an account that
-        # cannot log in at all.
-        extra_fields["is_active"] = True
         extra_fields["is_staff"] = True
         extra_fields["is_superuser"] = True
         extra_fields["role"] = Role.ADMIN
@@ -71,11 +65,15 @@ class User(AbstractUser):
     # validators quote them when a password is too similar to a name.
     first_name = models.CharField(_("first name"), max_length=150)
     last_name = models.CharField(_("last name"), max_length=150)
+    # Active from registration on: nothing has to be confirmed first. An admin
+    # deactivates an account by clearing it, which stops its logins while
+    # keeping the account and its appointments.
     is_active = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name="attivo",
         help_text=(
-            "Diventa vero quando l'utente apre il link di verifica ricevuto per email."
+            "Toglilo per impedire all'utente di accedere, invece di eliminarne "
+            "l'account."
         ),
     )
 

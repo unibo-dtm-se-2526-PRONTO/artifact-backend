@@ -13,6 +13,7 @@ from tests.conftest import PASSWORD, make_user
 User = get_user_model()
 
 URL = "/api/auth/register/"
+LOGIN_URL = "/api/auth/login/"
 
 # Complete, valid sign-ups; a test that needs a variation spreads one and
 # overrides a key, so what it is about stands out.
@@ -118,26 +119,39 @@ def test_duplicate_email_is_rejected(client):
 
 
 @pytest.mark.django_db
-def test_registered_user_is_inactive_until_verified(client):
+def test_registered_user_is_active(client):
     client.post(
         URL,
         STUDENT,
         format="json",
     )
 
-    assert not User.objects.get(email="mario.rossi@studio.unibo.it").is_active
+    assert User.objects.get(email="mario.rossi@studio.unibo.it").is_active
 
 
 @pytest.mark.django_db
-def test_registration_sends_a_verification_email(client, mailoutbox):
+def test_registered_user_can_log_in_right_away(client):
+    client.post(URL, STUDENT, format="json")
+
+    response = client.post(
+        LOGIN_URL,
+        {"email": STUDENT["email"], "password": STUDENT["password"]},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "token" in response.json()
+
+
+@pytest.mark.django_db
+def test_registration_sends_no_email(client, mailoutbox):
     client.post(
         URL,
         STUDENT,
         format="json",
     )
 
-    assert len(mailoutbox) == 1
-    assert mailoutbox[0].to == ["mario.rossi@studio.unibo.it"]
+    assert mailoutbox == []
 
 
 @pytest.mark.django_db

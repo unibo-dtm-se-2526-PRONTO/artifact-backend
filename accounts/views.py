@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
-from .verification import activate, send_verification_email
+from .verification import activate
 
 
 class RegisterView(generics.CreateAPIView):
@@ -14,10 +14,6 @@ class RegisterView(generics.CreateAPIView):
 
     serializer_class = RegisterSerializer  # delega tutta la logica al serializer
     permission_classes = [AllowAny]
-
-    def perform_create(self, serializer):
-        # The account is created inactive; the link in this email activates it.
-        send_verification_email(serializer.save())
 
 
 class VerifyEmailView(APIView):

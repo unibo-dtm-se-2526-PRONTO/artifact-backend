@@ -95,9 +95,7 @@ def make_user(email, role, **fields):
         for key in ("matricola", "degree_programme")
         if key in fields
     }
-    user = User.objects.create_user(
-        email=email, password=PASSWORD, role=role, is_active=True, **fields
-    )
+    user = User.objects.create_user(email=email, password=PASSWORD, role=role, **fields)
     if role == User.Role.STUDENT:
         StudentProfile.objects.create(
             user=user,

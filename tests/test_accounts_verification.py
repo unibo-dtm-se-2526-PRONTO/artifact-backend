@@ -11,7 +11,6 @@ from tests.conftest import PASSWORD
 
 User = get_user_model()
 
-REGISTER_URL = "/api/auth/register/"
 LOGIN_URL = "/api/auth/login/"
 
 
@@ -28,6 +27,7 @@ def user(db):
         role=User.Role.STUDENT,
         first_name="Mario",
         last_name="Rossi",
+        is_active=False,
     )
 
 
@@ -70,27 +70,3 @@ def test_a_link_for_an_unknown_user_is_rejected(client, user):
     response = client.get(url)
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-
-@pytest.mark.django_db
-def test_the_link_from_the_registration_email_works(client, mailoutbox):
-    client.post(
-        REGISTER_URL,
-        {
-            "email": "anna.bianchi@unibo.it",
-            "password": PASSWORD,
-            "first_name": "Anna",
-            "last_name": "Bianchi",
-        },
-        format="json",
-    )
-    link = next(
-        word
-        for word in mailoutbox[0].body.split()
-        if word.startswith("http") and "/verify/" in word
-    )
-
-    response = client.get(urlparse(link).path)
-
-    assert response.status_code == status.HTTP_200_OK
-    assert User.objects.get(email="anna.bianchi@unibo.it").is_active

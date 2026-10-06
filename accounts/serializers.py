@@ -149,9 +149,10 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        # authenticate() rejects inactive users too, so an unverified account
-        # cannot log in. The error stays generic on purpose: telling the caller
-        # that the account exists but is unverified would leak who is registered.
+        # authenticate() rejects inactive users too, so an account an admin has
+        # deactivated cannot log in. The error stays generic on purpose: telling
+        # the caller that the account exists but is deactivated would leak who
+        # is registered.
         user = authenticate(username=attrs["email"].lower(), password=attrs["password"])
         if user is None:
             raise serializers.ValidationError("Invalid email or password.")

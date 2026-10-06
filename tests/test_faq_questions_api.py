@@ -48,7 +48,10 @@ def internship(db):
 def ask(client, office, question, **params):
     query = "&".join(f"{key}={value}" for key, value in params.items())
     url = f"{QUESTIONS_URL}?{query}" if query else QUESTIONS_URL
-    return client.post(url, {"office": office, "question": question}, format="json")
+    payload = {"question": question}
+    if office is not None:
+        payload["office"] = office
+    return client.post(url, payload, format="json")
 
 
 # Asking
@@ -136,6 +139,38 @@ def test_a_question_without_a_match_is_still_recorded(student_client, certificat
     inquiry = Inquiry.objects.get()
     assert inquiry.matched_faq is None
     assert inquiry.score is None
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db
+def test_asking_without_an_office_searches_every_office(
+    student_client, certificate, internship
+):
+    response = ask(student_client, None, "Come attivo il tirocinio?")
+
+    assert response.status_code == status.HTTP_201_CREATED
+    body = response.json()
+    assert body["match"]["faq"]["id"] == internship.id
+    assert body["match"]["office"] == OfficeCode.INTERNSHIPS
+    # Filed under the office of the answer, so it is not reassigned.
+    assert body["office"] == OfficeCode.INTERNSHIPS
+    assert body["office_reassigned"] is False
+    assert Inquiry.objects.get().office.code == OfficeCode.INTERNSHIPS
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db
+def test_a_question_without_an_office_or_a_match_is_filed_under_none(
+    student_client, certificate
+):
+    response = ask(student_client, None, "Dove parcheggio la bicicletta?")
+
+    assert response.status_code == status.HTTP_201_CREATED
+    body = response.json()
+    assert body["office"] is None
+    assert body["match"] is None
+    assert body["office_reassigned"] is False
+    assert Inquiry.objects.get().office is None
 
 
 @pytest.mark.django_db

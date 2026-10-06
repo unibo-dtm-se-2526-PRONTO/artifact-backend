@@ -440,8 +440,11 @@ code, as `office` in requests and `office_code` in the FAQs it returns.
 
 ### Asking a question
 
-Before booking, a student picks an office and writes their question
-(`POST /api/questions/?lang=it|en`). The answer, `201`:
+Before booking, a student writes their question and, optionally, the office
+it is about (`POST /api/questions/?lang=it|en`, body
+`{"question": "...", "office": "ADMIN_OFFICE"}`). Without an office, every
+office is searched at once: a student rarely knows which one a question
+belongs to. The answer, `201`:
 
 ```json
 {
@@ -461,7 +464,9 @@ Before booking, a student picks an office and writes their question
 `match` is `null` when no FAQ is relevant enough. `office` is the office the
 student asked; `match.office` the one the answer belongs to, and
 `office_reassigned` says they differ, so the client can offer to book with the
-right office. If the answer helps, the client calls
+right office. A question asked without an office is filed under the office of
+the answer, so it is never reassigned, or under none (`office` is `null`) when
+there is no answer. If the answer helps, the client calls
 `POST /api/questions/<id>/resolve/` and the flow ends there; if not, it books
 through `POST /api/appointments/` as usual, passing `match.faq.id` as `faq_id`.
 Resolving an inquiry that is already resolved answers `200` again, so a retry
@@ -539,8 +544,9 @@ Semantic search (IR4) finds a FAQ worded differently from the question:
 
 Each matcher (`FullTextMatcher`, `SemanticMatcher`) only finds the best
 candidate among a set of FAQs; `CascadeMatcher` chains them, and
-`find_best_match` applies the office-first policy on top: the office the
-student chose is searched first, with the whole cascade, and only if nothing
+`find_best_match` applies the office-first policy on top: with no office, all
+of them are searched at once; otherwise the office the student chose is
+searched first, with the whole cascade, and only if nothing
 there is found are all offices searched, the best of those being returned with
 its own office.
 

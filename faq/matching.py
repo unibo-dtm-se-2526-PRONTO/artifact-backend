@@ -162,15 +162,19 @@ class CascadeMatcher:
 def find_best_match(question, office_code, language, matcher=None):
     """The published FAQ that best answers `question`, or None.
 
-    The office the student chose is searched first. Only if nothing there is
-    relevant enough are all the offices searched, so a student who picked the
-    wrong office still gets an answer, and the match tells them whose it is.
-    The cascade runs whole in each step: a FAQ of the chosen office found by
-    semantic search wins over a full-text match in another office.
+    With no `office_code`, every office is searched at once: a student rarely
+    knows which office a question belongs to. With one, that office is
+    searched first, and only if nothing there is relevant enough are all the
+    offices searched, so a student who picked the wrong office still gets an
+    answer, and the match tells them whose it is. The cascade runs whole in
+    each step: a FAQ of the chosen office found by semantic search wins over a
+    full-text match in another office.
     """
     matcher = matcher or CascadeMatcher(FullTextMatcher(), SemanticMatcher())
     # The office comes along with the FAQ: the answer is reported with it.
     published = Faq.objects.filter(is_active=True).select_related("office")
+    if office_code is None:
+        return matcher.best_match(question, language, published)
     return matcher.best_match(
         question, language, published.filter(office__code=office_code)
     ) or matcher.best_match(question, language, published)

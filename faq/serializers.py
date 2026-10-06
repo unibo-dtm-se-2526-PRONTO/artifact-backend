@@ -27,8 +27,8 @@ QUESTION_MAX_LENGTH = 1000
 
 
 class QuestionSerializer(serializers.Serializer):
-    """What a student sends to ask: an office, by its code, and a free-text
-    question.
+    """What a student sends to ask: a free-text question and, optionally, an
+    office, by its code. Without one, every office is searched.
 
     Any office will do, not only those taking bookings: a question can be
     answered even where no one can be booked. The code is checked against
@@ -37,7 +37,7 @@ class QuestionSerializer(serializers.Serializer):
     gets the same answer, as there is nothing to file the question under.
     """
 
-    office = serializers.ChoiceField(choices=OfficeCode.choices)
+    office = serializers.ChoiceField(choices=OfficeCode.choices, required=False)
     question = serializers.CharField(max_length=QUESTION_MAX_LENGTH)
 
     def validate_office(self, code):
@@ -69,7 +69,9 @@ class InquirySerializer(serializers.ModelSerializer):
     whatever the request that reads it back.
     """
 
-    office = serializers.CharField(source="office.code", read_only=True)
+    office = serializers.CharField(
+        source="office.code", read_only=True, allow_null=True
+    )
     match = serializers.SerializerMethodField()
     office_reassigned = serializers.SerializerMethodField()
 

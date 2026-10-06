@@ -84,6 +84,18 @@ def test_a_question_is_matched_with_the_best_faq_of_its_office(knowledge_base):
 
 @pytest.mark.postgres
 @pytest.mark.django_db
+def test_without_an_office_every_office_is_searched(knowledge_base, internship):
+    match = find_best_match(
+        "Come attivo un tirocinio curriculare?", office_code=None, language="it"
+    )
+
+    assert match is not None
+    assert match.faq == internship
+    assert match.office_code == OfficeCode.INTERNSHIPS
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db
 def test_italian_words_are_matched_by_their_stem(knowledge_base, certificate):
     # Plural against singular, and a verb in another person: "pagano" is not
     # "pago", but both are the stem "pag".

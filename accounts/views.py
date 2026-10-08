@@ -6,7 +6,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
-from .verification import activate
 
 
 class RegisterView(generics.CreateAPIView):
@@ -14,20 +13,6 @@ class RegisterView(generics.CreateAPIView):
 
     serializer_class = RegisterSerializer  # delega tutta la logica al serializer
     permission_classes = [AllowAny]
-
-
-class VerifyEmailView(APIView):
-    """Activate the account the verification link points to."""
-
-    permission_classes = [AllowAny]
-
-    def get(self, request, uidb64, token):
-        if activate(uidb64, token) is None:
-            return Response(
-                {"detail": "This verification link is invalid or has expired."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return Response({"detail": "Account verified."}, status=status.HTTP_200_OK)
 
 
 class LoginView(APIView):

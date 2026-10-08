@@ -106,8 +106,8 @@ REST_FRAMEWORK = {
 
 ROOT_URLCONF = "pronto.urls"
 
-# Email. In development the verification link is printed to the console instead
-# of being delivered, so no SMTP account is needed to try the sign-up flow.
+# Email. In development the booking e-mails are printed to the console instead
+# of being delivered, so no SMTP account is needed to try the booking flow.
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
@@ -122,9 +122,6 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_flag("EMAIL_USE_TLS", default=True)
 EMAIL_TIMEOUT = 10
-
-# Where the verification link sent by email points to.
-BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
 
 TEMPLATES = [
     {

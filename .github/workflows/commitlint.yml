@@ -10,6 +10,10 @@ permissions:
 jobs:
   commitlint:
     name: Conventional Commits
+    # Not on the release pull request from develop: its commits were checked
+    # when they reached develop, and it carries the history from before this
+    # check, which can no longer be reworded.
+    if: github.head_ref != 'develop'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code

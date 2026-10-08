@@ -1,0 +1,25 @@
+name: commitlint
+# semantic-release reads the version bump from the commit messages, so a
+# message that is not a Conventional Commit is a release that silently does not
+# happen. Checked on pull requests, where it can still be reworded.
+on:
+  pull_request:
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  commitlint:
+    name: Conventional Commits
+    # Not on the release pull request from develop: its commits were checked
+    # when they reached develop, and it carries the history from before this
+    # check, which can no longer be reworded.
+    if: github.head_ref != 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # the commits of the pull request
+
+      - name: Lint Commit Messages
+        uses: wagoid/commitlint-github-action@v6

@@ -1,25 +1,35 @@
 [tool.poetry]
-name = "artifact-backend"
-packages = [
-    { include = "artifact-backend" },
-]
-version = "2.4.1"
+# The name the project will be published under on PyPI, as one package holding
+# both the backend and the built frontend. Not published yet: releases are git
+# tags and GitHub releases only (release.config.mjs), hence package-mode.
+name = "pronto-helpdesk"
+package-mode = false
+version = "0.0.0"
 description = "Backend of a web application that automates the phone helpdesk of the Campus of Cesena"
 authors = ["Sara Ladisa <sara.ladisa@studio.unibo.it>", "Giulio Salotti <giulio.salotti@studio.unibo.it>"]
 license = "Apache 2.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-# update the Python versions in .github/workflows/check.yml if you change this
-python = ">= 3.9.0 < 4.0.0"
+# CI and the Dockerfile run on Python 3.12: update .github/workflows/check.yml
+# and the Dockerfile together if that changes
+python = ">= 3.10.0 < 4.0.0"
+django = "^5.2"
+python-dotenv = "^1.0.1"
+djangorestframework = "^3.16.0"
+django-cors-headers = "^4.4.0"
+psycopg = {extras = ["binary"], version = "^3.2.0"}
+openpyxl = "^3.1.5"
+chromadb = "^1.5.9"
+fastembed = "^0.8.1"
 
 [tool.poetry.group.dev.dependencies]
 coverage = "^7.4.0"
 mypy = "^1.10.1"
 poethepoet = "^0.37.0"
-poetry = "^1.8.3"
 pytest = "^8.3.5"
 ruff = "^0.15.0"
+pytest-django = "^4.2.0"
 
 [tool.poe.tasks]
 test = "pytest"
@@ -30,8 +40,8 @@ ruff-check = "ruff check"
 ruff-fix = "ruff check --fix"
 format = "ruff format"
 format-check = "ruff format --check"
-mypy = "mypy artifact-backend tests"
-compile = "python -m compileall artifact-backend tests"
+mypy = "mypy pronto accounts offices booking faq tests"
+compile = "python -m compileall pronto accounts offices booking faq tests"
 static-checks = [
     "ruff-check",
     "mypy",
@@ -40,3 +50,16 @@ static-checks = [
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "pronto.settings"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--strict-markers"
+markers = [
+    "postgres: needs PostgreSQL; skipped when the tests run on SQLite (see TEST_DATABASE_URL)",
+]
+
+[tool.mypy]
+# Django does not ship type stubs (no py.typed marker)
+ignore_missing_imports = true

@@ -1,0 +1,12 @@
+{% autoescape off %}Pronto: il tuo appuntamento con {{ office }} è stato annullato
+
+Il tuo appuntamento è stato annullato dall'ufficio.
+
+Ufficio: {{ office }}
+Quando: {{ when }}
+
+La tua domanda:
+{{ appointment.question_text }}
+
+Puoi prenotare un altro orario da Pronto.
+{% endautoescape %}

@@ -1,0 +1,15 @@
+{% autoescape off %}Pronto: nuovo appuntamento {{ when }}
+
+Ti è stato assegnato un nuovo appuntamento.
+
+Studente: {% if student.get_full_name %}{{ student.get_full_name }} ({{ student.email }}){% else %}{{ student.email }}{% endif %}
+Ufficio: {{ office }}
+Quando: {{ when }}
+
+La domanda dello studente:
+{{ appointment.question_text }}
+
+{% if faq %}La FAQ proposta allo studente, che non ha risolto il suo dubbio:
+D: {{ faq.question_it }}
+R: {{ faq.answer_it }}{% else %}Nessuna FAQ pertinente è stata trovata per questa domanda.{% endif %}
+{% endautoescape %}

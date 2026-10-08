@@ -1,7 +1,10 @@
 [tool.poetry]
-name = "artifact-backend"
+# The name the project will be published under on PyPI, as one package holding
+# both the backend and the built frontend. Not published yet: releases are git
+# tags and GitHub releases only (release.config.mjs), hence package-mode.
+name = "pronto-helpdesk"
 package-mode = false
-version = "2.4.1"
+version = "0.0.0"
 description = "Backend of a web application that automates the phone helpdesk of the Campus of Cesena"
 authors = ["Sara Ladisa <sara.ladisa@studio.unibo.it>", "Giulio Salotti <giulio.salotti@studio.unibo.it>"]
 license = "Apache 2.0"

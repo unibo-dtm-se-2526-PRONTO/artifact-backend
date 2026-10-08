@@ -1,0 +1,8 @@
+# Read by Docker in place of the frontend folder's own .dockerignore, as it
+# sits next to frontend.Dockerfile.
+.git
+node_modules/
+dist/
+coverage/
+.vite/
+*.local

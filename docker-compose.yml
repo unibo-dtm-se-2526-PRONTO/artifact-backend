@@ -63,6 +63,22 @@ services:
       - .:/app
       - fastembed:/fastembed
 
+  # The Vue frontend, on http://localhost:5173 (the origin the backend allows
+  # in CORS_ALLOWED_ORIGINS). Its sources live in ../artifact-frontend; the
+  # browser calls the backend at the VITE_API_URL of that folder's .env.
+  frontend:
+    build:
+      context: ../artifact-frontend
+      dockerfile: ../artifact-backend/frontend.Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ../artifact-frontend:/app
+      # Keeps the node_modules installed in the image, instead of the host's.
+      - /app/node_modules
+
 volumes:
   pgdata:
   chromadata:

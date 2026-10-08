@@ -5,7 +5,8 @@ of the Campus of Cesena: students look for an answer among the FAQs of each
 office and, when none helps, book an appointment with the office's staff.
 
 It is a Django and Django REST Framework project on PostgreSQL. The frontend
-lives in its own repository.
+lives in its own repository; `docker-compose.yml` can run it next to the
+backend (see [With Docker Compose](#with-docker-compose)).
 
 ## Getting started
 
@@ -29,11 +30,23 @@ poetry run python manage.py runserver
 docker compose up --build
 ```
 
-starts three containers: `db`, a PostgreSQL 16; `chroma`, the vector store of
-semantic FAQ matching (see [FAQ matching](#faq-matching)); and `backend`, which
-applies the migrations and serves the API on <http://localhost:8000>. The
-backend waits until both report healthy, so it never starts migrating against
-a server that is still booting.
+starts four containers: `db`, a PostgreSQL 16; `chroma`, the vector store of
+semantic FAQ matching (see [FAQ matching](#faq-matching)); `backend`, which
+applies the migrations and serves the API on <http://localhost:8000>; and
+`frontend`, the Vue app on the Vite dev server at <http://localhost:5173>. The
+backend waits until `db` and `chroma` report healthy, so it never starts
+migrating against a server that is still booting.
+
+The `frontend` service builds the frontend repository, which it expects next
+to this one, as `../artifact-frontend`. Its image comes from
+`frontend.Dockerfile` (Node 24, `npm ci`, then `vite --host`), with
+`frontend.Dockerfile.dockerignore` keeping `.git`, `node_modules` and build
+outputs out of it. The sources are mounted, so an edit in the frontend reloads
+the page without a rebuild; the `node_modules` installed in the image are kept
+in place of the host's. The browser calls the backend at the `VITE_API_URL` of
+the frontend's `.env`, `http://localhost:8000`, the origin the backend allows in
+`CORS_ALLOWED_ORIGINS`. Rebuild the image after the frontend's dependencies
+change: `docker compose build frontend`.
 
 In compose the backend always talks to the `db` container: `docker-compose.yml`
 overrides the `DB_*` keys, whatever `.env` says, and turns SSL off, because the

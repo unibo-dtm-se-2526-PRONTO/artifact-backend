@@ -259,8 +259,7 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 | Method | Path                                    | Auth    | Description                                      |
 |--------|-----------------------------------------|---------|--------------------------------------------------|
 | GET    | `/api/health/`                          | public  | Health check, returns `{"status": "ok"}`         |
-| POST   | `/api/auth/register/`                   | public  | Create an account, inactive until verified; `role` is derived from the email domain. Payload in [Accounts](#accounts) |
-| GET    | `/api/auth/verify/<uidb64>/<token>/`    | public  | The link e-mailed at registration; activates the account |
+| POST   | `/api/auth/register/`                   | public  | Create an account, active straight away; `role` is derived from the email domain. Payload in [Accounts](#accounts) |
 | POST   | `/api/auth/login/`                      | public  | Exchange email and password for a token          |
 | POST   | `/api/auth/logout/`                     | token   | Delete the caller's token                        |
 | GET    | `/api/auth/me/`                         | token   | The authenticated user's own data, same shape as the registration response |
@@ -290,7 +289,7 @@ question is written in, and an inquiry is always read back in that language.
 
 | App | What it owns |
 |-----|--------------|
-| `accounts` | the user model and the student profiles, registration, login and e-mail verification |
+| `accounts` | the user model and the student profiles, registration and login |
 | `offices` | the helpdesk offices and `seed_offices` |
 | `faq` | the FAQs, the questions students ask (`Inquiry`), matching and the import |
 | `booking` | employee profiles, shifts and appointments, and the office endpoints |
@@ -640,6 +639,14 @@ and cannot be chosen by the client:
 
 Any other domain is rejected with `400`.
 
+An account is active as soon as it is registered: there is no e-mail
+verification, and the user can log in straight away. An administrator can
+deactivate an account from the admin (`is_active`), after which its login is
+refused with the same `400` as a wrong password, so the response never tells
+whether an email is registered. Migration `accounts.0008` activated the
+accounts that were still waiting for the verification link that no longer
+exists.
+
 ### Personal data
 
 Registration asks for different data depending on the role the email domain
@@ -758,12 +765,7 @@ In the admin, users can still be searched by matricola.
 - Sessions use DRF's `TokenAuthentication`: `POST /api/auth/login/` returns a
   random 40-character key, stored server-side in `authtoken_token`, one per
   user. The key is not signed and does not expire; it stops working only when
-  the user logs out, which deletes it. Only the e-mail verification link is a
-  signed token with a lifetime (Django's `default_token_generator`, valid for
-  `PASSWORD_RESET_TIMEOUT`, three days by default).
+  the user logs out, which deletes it.
 - A login through `POST /api/auth/login/` records `last_login`. The view sends
   Django's `user_logged_in` signal, as a session login would, and Django's own
   receiver updates the column; a `NULL` means the user has never logged in.
-  Since the verification token is derived from `last_login`, a verification
-  link stops working once its account has logged in, which it can only do
-  after the link was opened.

@@ -17,7 +17,6 @@ ME_URL = "/api/auth/me/"
 
 @pytest.fixture
 def user(db):
-    # Already verified, as make_user makes them: these tests are about logging in.
     return make_user(
         "mario.rossi@studio.unibo.it",
         User.Role.STUDENT,
@@ -110,7 +109,8 @@ def test_login_with_a_different_case_email_succeeds(client, user):
 
 
 @pytest.mark.django_db
-def test_unverified_user_cannot_log_in(client, user):
+def test_deactivated_user_cannot_log_in(client, user):
+    # An admin deactivates an account by clearing is_active.
     user.is_active = False
     user.save()
 
@@ -123,12 +123,12 @@ def test_unverified_user_cannot_log_in(client, user):
 
 
 @pytest.mark.django_db
-def test_unverified_user_gets_the_same_error_as_a_wrong_password(client, user):
-    # Deliberate: a specific "not verified" message would reveal that the
+def test_deactivated_user_gets_the_same_error_as_a_wrong_password(client, user):
+    # Deliberate: a specific "deactivated" message would reveal that the
     # address belongs to a registered account.
     user.is_active = False
     user.save()
-    unverified = client.post(
+    deactivated = client.post(
         LOGIN_URL, {"email": user.email, "password": PASSWORD}, format="json"
     )
 
@@ -138,7 +138,8 @@ def test_unverified_user_gets_the_same_error_as_a_wrong_password(client, user):
         LOGIN_URL, {"email": user.email, "password": "wrong-passphrase"}, format="json"
     )
 
-    assert unverified.json() == wrong_password.json()
+    assert deactivated.json() == wrong_password.json()
+    assert deactivated.json() == {"non_field_errors": ["Invalid email or password."]}
 
 
 @pytest.mark.django_db
@@ -234,8 +235,6 @@ def test_no_endpoint_ever_returns_the_password_or_its_hash(client):
         format="json",
     )
     user = User.objects.get()
-    user.is_active = True
-    user.save()
     login = client.post(
         LOGIN_URL, {"email": user.email, "password": PASSWORD}, format="json"
     )

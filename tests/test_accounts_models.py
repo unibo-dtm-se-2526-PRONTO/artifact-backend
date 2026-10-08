@@ -56,7 +56,7 @@ def test_password_is_hashed_and_not_stored_in_clear_text():
 
 
 @pytest.mark.django_db
-def test_new_user_is_inactive_until_the_email_is_verified():
+def test_new_user_is_active():
     user = User.objects.create_user(
         email="mario.rossi@studio.unibo.it",
         password=PASSWORD,
@@ -64,7 +64,7 @@ def test_new_user_is_inactive_until_the_email_is_verified():
         **NAMES,
     )
 
-    assert not user.is_active
+    assert user.is_active
 
 
 @pytest.mark.django_db
@@ -80,7 +80,7 @@ def test_email_is_stored_lowercase():
 
 
 @pytest.mark.django_db
-def test_superuser_is_active_and_does_not_need_verification():
+def test_superuser_is_active_staff_and_superuser():
     admin = User.objects.create_superuser(
         email="admin@unibo.it", password=PASSWORD, **NAMES
     )

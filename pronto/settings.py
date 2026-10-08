@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -22,6 +23,19 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
+
+# The release this code belongs to. semantic-release writes it into
+# pyproject.toml (`poetry version`) on every release, so it is read from there
+# rather than kept twice. A regular expression rather than tomllib, which
+# needs Python 3.11 while pyproject.toml still allows 3.10.
+_version = re.search(
+    r'^version = "([^"]+)"',
+    (BASE_DIR / "pyproject.toml").read_text(encoding="utf-8"),
+    re.MULTILINE,
+)
+if _version is None:
+    raise ImproperlyConfigured("pyproject.toml does not say which version this is.")
+VERSION = _version.group(1)
 
 
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/

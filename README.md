@@ -224,6 +224,14 @@ as `chore(release): …`.
 Nothing is published to PyPI: `pyproject.toml` sets `package-mode = false`, as
 this is an application to deploy, not a library to install. The workflow needs
 one secret, `RELEASE_TOKEN`, a GitHub token allowed to push to the repository.
+Tag, GitHub release and release commit all come from the account that owns
+it. The running version is `settings.VERSION`, read from `pyproject.toml`, and
+`/api/health/` reports it.
+
+Commit messages are checked on every pull request
+(`.github/workflows/commitlint.yml`, rules in `commitlint.config.mjs`): a
+message semantic-release cannot read would be a release that silently does
+not happen, so it is caught while it can still be reworded.
 
 Dependency updates are proposed by [Renovate](https://docs.renovatebot.com/),
 configured in `renovate.json`, and merged automatically once CI passes.
@@ -271,7 +279,7 @@ and `IsAuthenticated`, set in `pronto/settings.py`.
 
 | Method | Path                                    | Auth    | Description                                      |
 |--------|-----------------------------------------|---------|--------------------------------------------------|
-| GET    | `/api/health/`                          | public  | Health check, returns `{"status": "ok"}`         |
+| GET    | `/api/health/`                          | public  | Health check, returns `{"status": "ok", "version": "x.y.z"}` |
 | POST   | `/api/auth/register/`                   | public  | Create an account, active straight away; `role` is derived from the email domain. Payload in [Accounts](#accounts) |
 | POST   | `/api/auth/login/`                      | public  | Exchange email and password for a token          |
 | POST   | `/api/auth/logout/`                     | token   | Delete the caller's token                        |

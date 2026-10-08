@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
@@ -34,8 +35,11 @@ from .services import (
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def health(request: Request) -> Response:
-    """Report that the service is up. Used by monitoring and deployment checks."""
-    return Response({"status": "ok"}, status=status.HTTP_200_OK)
+    """Report that the service is up, and which release is running. Used by
+    monitoring and deployment checks."""
+    return Response(
+        {"status": "ok", "version": settings.VERSION}, status=status.HTTP_200_OK
+    )
 
 
 class OfficeListView(LanguageAwareMixin, generics.ListAPIView):

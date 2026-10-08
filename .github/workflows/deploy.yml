@@ -58,5 +58,13 @@ jobs:
           npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          # The release commit is authored by the owner of RELEASE_TOKEN rather
+          # than semantic-release-bot, so tag, commit and GitHub release all
+          # come from the same account. The no-reply address keeps a real one
+          # out of a public history while still linking the commit to the account.
+          GIT_AUTHOR_NAME: Giulio Salotti
+          GIT_AUTHOR_EMAIL: 93626674+giuliosalotti@users.noreply.github.com
+          GIT_COMMITTER_NAME: Giulio Salotti
+          GIT_COMMITTER_EMAIL: 93626674+giuliosalotti@users.noreply.github.com
           # dry run if not on main/master branch, or if initial commit
           RELEASE_DRY_RUN: ${{ steps.skip_release.outputs.skip == 'true' || (github.ref_name != 'master' && github.ref_name != 'main') }}

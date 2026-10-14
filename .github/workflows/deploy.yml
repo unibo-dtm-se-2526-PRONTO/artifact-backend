@@ -30,8 +30,8 @@ jobs:
             echo "skip=true" >> $GITHUB_OUTPUT
           fi
 
-      # Poetry is only needed for `poetry version`, which semantic-release runs
-      # to record the new version in pyproject.toml
+      # Poetry records the new version in pyproject.toml (`poetry version`),
+      # then builds the package and uploads it (`poetry publish --build`)
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -66,5 +66,13 @@ jobs:
           GIT_AUTHOR_EMAIL: 93626674+giuliosalotti@users.noreply.github.com
           GIT_COMMITTER_NAME: Giulio Salotti
           GIT_COMMITTER_EMAIL: 93626674+giuliosalotti@users.noreply.github.com
+          # One secret for both indexes: it holds a TestPyPI token while
+          # releases go to TestPyPI, a PyPI token once they go to PyPI.
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
+          POETRY_PYPI_TOKEN_TESTPYPI: ${{ secrets.PYPI_TOKEN }}
+          # TestPyPI unless the repository variable PUBLISH_TO_PYPI is 'true'
+          # (Settings → Secrets and variables → Actions → Variables), so a
+          # missing variable can never publish to the real PyPI by mistake.
+          RELEASE_TEST_PYPI: ${{ vars.PUBLISH_TO_PYPI != 'true' }}
           # dry run if not on main/master branch, or if initial commit
           RELEASE_DRY_RUN: ${{ steps.skip_release.outputs.skip == 'true' || (github.ref_name != 'master' && github.ref_name != 'main') }}

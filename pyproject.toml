@@ -1,13 +1,19 @@
 [tool.poetry]
-# The name the project will be published under on PyPI, as one package holding
-# both the backend and the built frontend. Not published yet: releases are git
-# tags and GitHub releases only (release.config.mjs), hence package-mode.
+# The name the project is published under on PyPI (or TestPyPI, see
+# release.config.mjs). The package holds the Django project and its apps; the
+# frontend is not part of it.
 name = "pronto-helpdesk"
-package-mode = false
 version = "0.0.0"
+packages = [
+    { include = "pronto" },
+    { include = "accounts" },
+    { include = "offices" },
+    { include = "booking" },
+    { include = "faq" },
+]
 description = "Backend of a web application that automates the phone helpdesk of the Campus of Cesena"
 authors = ["Sara Ladisa <sara.ladisa@studio.unibo.it>", "Giulio Salotti <giulio.salotti@studio.unibo.it>"]
-license = "Apache 2.0"
+license = "Apache-2.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]

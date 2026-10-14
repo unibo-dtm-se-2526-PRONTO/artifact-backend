@@ -1,7 +1,7 @@
 name: deploy
-on:
-  workflow_call:
-  workflow_dispatch:
+on: #chi può lanciarlo
+  workflow_call: #permette ad altri workflow di richiamarlo. in questo caso, deploy è nested in check
+  workflow_dispatch: #permette di lanciarlo a mano dalla tab actions di gh
 permissions:
   contents: write
   packages: write

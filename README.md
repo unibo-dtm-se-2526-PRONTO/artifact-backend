@@ -223,11 +223,10 @@ release is a git tag, a GitHub release, the new version in `pyproject.toml`
 (`poetry publish --build`). The package holds `pronto` and the four apps;
 `manage.py` and the frontend are not part of it.
 
-The workflow needs two secrets:
-
-- `RELEASE_TOKEN`, a GitHub token allowed to push to the repository. Tag,
-  GitHub release and release commit all come from the account that owns it.
-- `PYPI_TOKEN`, an API token of the package index.
+The workflow pushes with the token GitHub Actions generates for every run, so
+tag and GitHub release come from `github-actions[bot]` and the release commit
+from `semantic-release-bot`, and no personal token has to be kept valid. It
+needs one secret, `PYPI_TOKEN`, an API token of the package index.
 
 Releases go to [TestPyPI](https://test.pypi.org/project/pronto-helpdesk/)
 unless the repository variable `PUBLISH_TO_PYPI` is `true`; `PYPI_TOKEN` must

@@ -5,6 +5,9 @@ on: #chi può lanciarlo
 permissions:
   contents: write
   packages: write
+  # semantic-release comments on the issues and pull requests a release ships
+  issues: write
+  pull-requests: write
 jobs:
   release:
     name: Release
@@ -57,15 +60,11 @@ jobs:
           npm install
           npx semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          # The release commit is authored by the owner of RELEASE_TOKEN rather
-          # than semantic-release-bot, so tag, commit and GitHub release all
-          # come from the same account. The no-reply address keeps a real one
-          # out of a public history while still linking the commit to the account.
-          GIT_AUTHOR_NAME: Giulio Salotti
-          GIT_AUTHOR_EMAIL: 93626674+giuliosalotti@users.noreply.github.com
-          GIT_COMMITTER_NAME: Giulio Salotti
-          GIT_COMMITTER_EMAIL: 93626674+giuliosalotti@users.noreply.github.com
+          # The token Actions generates for every run, so no personal token can
+          # expire: tag and GitHub release come from github-actions[bot], the
+          # release commit from semantic-release-bot. Its pushes start no
+          # other workflow, which the release commit skips anyway ([skip ci]).
+          GITHUB_TOKEN: ${{ github.token }}
           # One secret for both indexes: it holds a TestPyPI token while
           # releases go to TestPyPI, a PyPI token once they go to PyPI.
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}

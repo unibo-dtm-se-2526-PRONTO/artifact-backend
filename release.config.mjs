@@ -1,22 +1,38 @@
 let dryRun = (process.env.RELEASE_DRY_RUN || "false").toLowerCase() === "true";
+let testPypi = (process.env.RELEASE_TEST_PYPI || "false").toLowerCase() === "true";
 
-// The backend is deployed, not published: pyproject.toml has package-mode =
-// false, so there is nothing to build or upload to PyPI. A release is a git tag,
-// a GitHub release and the version recorded in pyproject.toml and CHANGELOG.md.
-// `poetry version` works in non-package mode too.
+// A release records the new version in pyproject.toml (`poetry version`), then
+// builds the package and uploads it to PyPI, or to TestPyPI (the repository
+// declared in poetry.toml) while RELEASE_TEST_PYPI is true. Poetry reads the
+// token from POETRY_PYPI_TOKEN_PYPI or POETRY_PYPI_TOKEN_TESTPYPI (deploy.yml),
+// so it never appears in a command.
 let prepareCmd = "poetry version -- \${nextRelease.version}";
+let publishCmd = "poetry publish --build";
+
+if (testPypi) {
+    publishCmd += " --repository testpypi";
+}
+
+if (dryRun) {
+    publishCmd += " --dry-run";
+}
 
 import config from 'semantic-release-preconfigured-conventional-commits' with {type: 'json'};
 
 config.plugins.push(
     ["@semantic-release/exec", {
         "prepareCmd" : prepareCmd,
+        "publishCmd": publishCmd,
     }]
 )
 
 if (!dryRun) {
     config.plugins.push(
-        "@semantic-release/github",
+        ["@semantic-release/github", {
+            "assets": [
+                { "path": "dist/*" },
+            ]
+        }],
         ["@semantic-release/git", {
             "assets": [
                 "CHANGELOG.md",

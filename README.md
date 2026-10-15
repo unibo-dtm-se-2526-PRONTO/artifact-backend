@@ -218,14 +218,24 @@ after CI. It reads the commit messages, which therefore follow
 makes a minor release, `fix` and `docs` a patch, a `!` a major one, while
 `chore`, `ci`, `test` and `refactor` make none, dependency updates aside. A
 release is a git tag, a GitHub release, the new version in `pyproject.toml`
-(written by `poetry version`) and an entry in `CHANGELOG.md`, committed back
-as `chore(release): …`.
+(written by `poetry version`), an entry in `CHANGELOG.md`, committed back as
+`chore(release): …`, and the package `pronto-helpdesk` uploaded to PyPI
+(`poetry publish --build`). The package holds `pronto` and the four apps;
+`manage.py` and the frontend are not part of it.
 
-Nothing is published to PyPI: `pyproject.toml` sets `package-mode = false`, as
-this is an application to deploy, not a library to install. The workflow needs
-one secret, `RELEASE_TOKEN`, a GitHub token allowed to push to the repository.
-Tag, GitHub release and release commit all come from the account that owns
-it. The running version is `settings.VERSION`, read from `pyproject.toml`, and
+The workflow pushes with the token GitHub Actions generates for every run, so
+tag and GitHub release come from `github-actions[bot]` and the release commit
+from `semantic-release-bot`, and no personal token has to be kept valid. It
+needs one secret, `PYPI_TOKEN`, an API token of the package index.
+
+Releases go to [TestPyPI](https://test.pypi.org/project/pronto-helpdesk/)
+unless the repository variable `PUBLISH_TO_PYPI` is `true`; `PYPI_TOKEN` must
+then hold a token of [PyPI](https://pypi.org/project/pronto-helpdesk/) instead.
+A version uploaded to an index can never be uploaded again, even after
+deleting it there, so check the package locally first with `poetry build`.
+
+The running version is `settings.VERSION`, read from `pyproject.toml`, or from
+the metadata of the installed package when there is no `pyproject.toml`, and
 `/api/health/` reports it.
 
 Commit messages are checked on every pull request

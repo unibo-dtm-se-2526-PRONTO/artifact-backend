@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import importlib.metadata
 import os
 import re
 import sys
@@ -28,14 +29,17 @@ load_dotenv(BASE_DIR / ".env")
 # pyproject.toml (`poetry version`) on every release, so it is read from there
 # rather than kept twice. A regular expression rather than tomllib, which
 # needs Python 3.11 while pyproject.toml still allows 3.10.
-_version = re.search(
-    r'^version = "([^"]+)"',
-    (BASE_DIR / "pyproject.toml").read_text(encoding="utf-8"),
-    re.MULTILINE,
-)
-if _version is None:
-    raise ImproperlyConfigured("pyproject.toml does not say which version this is.")
-VERSION = _version.group(1)
+# Installed from PyPI there is no pyproject.toml next to the code: the version
+# then comes from the metadata of the installed package, written at build time.
+try:
+    _pyproject = (BASE_DIR / "pyproject.toml").read_text(encoding="utf-8")
+except FileNotFoundError:
+    VERSION = importlib.metadata.version("pronto-helpdesk")
+else:
+    _version = re.search(r'^version = "([^"]+)"', _pyproject, re.MULTILINE)
+    if _version is None:
+        raise ImproperlyConfigured("pyproject.toml does not say which version this is.")
+    VERSION = _version.group(1)
 
 
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/

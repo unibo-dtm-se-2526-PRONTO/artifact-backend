@@ -25,20 +25,14 @@ from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from .models import Weekday
+
 logger = logging.getLogger(__name__)
 
 EMPLOYEE_LANG = "it"
 
 WEEKDAYS = {
-    "it": [
-        "lunedì",
-        "martedì",
-        "mercoledì",
-        "giovedì",
-        "venerdì",
-        "sabato",
-        "domenica",
-    ],
+    "it": Weekday.labels,
     "en": [
         "Monday",
         "Tuesday",

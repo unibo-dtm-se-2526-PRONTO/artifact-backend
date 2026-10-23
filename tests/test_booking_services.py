@@ -118,12 +118,9 @@ def test_a_slot_stays_available_while_one_employee_is_free(
 @pytest.mark.django_db
 def test_a_slot_disappears_when_every_employee_is_booked(office, employee, day):
     slot = slot_at(day, 10)
-    for email in ("a@studio.unibo.it", "b@studio.unibo.it"):
-        student = make_user(email, User.Role.STUDENT)
-        try:
-            book(student, office, slot)
-        except BookingError:
-            pass
+    book(make_user("a@studio.unibo.it", User.Role.STUDENT), office, slot)
+    with pytest.raises(BookingError):
+        book(make_user("b@studio.unibo.it", User.Role.STUDENT), office, slot)
 
     assert slot not in available_slots(office, day)
 

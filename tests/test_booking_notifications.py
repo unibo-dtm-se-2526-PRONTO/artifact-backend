@@ -190,10 +190,13 @@ def test_nothing_is_sent_for_a_booking_that_is_rolled_back(
 ):
     """A booking undone by an enclosing transaction never happened, so nobody
     may be told about it."""
-    with django_capture_on_commit_callbacks() as callbacks:
-        with pytest.raises(RuntimeError), transaction.atomic():
-            book(student, office, day)
-            raise RuntimeError("the caller's own work failed")
+    with (
+        django_capture_on_commit_callbacks() as callbacks,
+        pytest.raises(RuntimeError),
+        transaction.atomic(),
+    ):
+        book(student, office, day)
+        raise RuntimeError("the caller's own work failed")
 
     assert callbacks == []
 
@@ -213,9 +216,11 @@ def test_a_failed_email_does_not_undo_the_booking(
 
     monkeypatch.setattr(notifications, "send_mail", smtp_is_down)
 
-    with caplog.at_level(logging.ERROR, logger="booking.notifications"):
-        with django_capture_on_commit_callbacks(execute=True):
-            appointment = book(student, office, day)
+    with (
+        caplog.at_level(logging.ERROR, logger="booking.notifications"),
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        appointment = book(student, office, day)
 
     assert Appointment.objects.filter(pk=appointment.pk).exists()
     assert "connection refused" in caplog.text
@@ -309,9 +314,8 @@ def test_a_refused_cancellation_sends_nothing(
     appointment = book(student, office, day)
     cancel_appointment(appointment, by=student)
 
-    with django_capture_on_commit_callbacks(execute=True):
-        with pytest.raises(BookingError):
-            cancel_appointment(appointment, by=student)
+    with django_capture_on_commit_callbacks(execute=True), pytest.raises(BookingError):
+        cancel_appointment(appointment, by=student)
 
     assert mailoutbox == []
 

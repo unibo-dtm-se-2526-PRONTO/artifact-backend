@@ -25,6 +25,7 @@ from booking.services import (
     BookingError,
     ShiftInUseError,
     book_appointment,
+    cancel_appointment,
     declare_shift,
     withdraw_shift,
 )
@@ -242,3 +243,48 @@ def test_a_shift_cannot_be_withdrawn_under_a_booking_not_yet_committed(
     assert isinstance(withdraw_outcome, ShiftInUseError)
     assert withdraw_outcome.appointments == [booked]
     assert Shift.objects.filter(pk=shift.pk).exists()
+
+
+# --- cancel_appointment ------------------------------------------------------
+
+
+def test_simultaneous_cancellations_send_the_emails_once(office, day, monkeypatch):
+    """A student cancels the same appointment twice at once, as a double click
+    would: one call cancels, the other is refused, and nobody is told twice.
+
+    Each call holds an instance loaded while the appointment was still booked,
+    as two requests would. The first pauses in the notification call, inside
+    its transaction, long enough for the second to reach the status check:
+    without the lock both would pass it.
+    """
+    make_employee(office)
+    student = make_user("mario.rossi@studio.unibo.it", User.Role.STUDENT)
+    booked = book_appointment(
+        student=student,
+        office=office,
+        slot=slot_at(day, 10),
+        question_text="Vorrei informazioni sul piano di studi.",
+        question_lang="it",
+    )
+
+    notified = []
+    appointment_cancelled = notifications.appointment_cancelled
+
+    def notify_after_a_pause(appointment, by):
+        notified.append(appointment.pk)
+        pytime.sleep(0.5)
+        appointment_cancelled(appointment, by=by)
+
+    monkeypatch.setattr(notifications, "appointment_cancelled", notify_after_a_pause)
+
+    def cancelling(instance):
+        return lambda: cancel_appointment(instance, by=student)
+
+    outcomes = run_together(
+        cancelling(Appointment.objects.get(pk=booked.pk)),
+        cancelling(Appointment.objects.get(pk=booked.pk)),
+    )
+
+    assert sum(isinstance(outcome, Appointment) for outcome in outcomes) == 1
+    assert sum(isinstance(outcome, BookingError) for outcome in outcomes) == 1
+    assert notified == [booked.pk]

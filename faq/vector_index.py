@@ -21,10 +21,11 @@ from functools import cache
 
 from django.conf import settings
 
+from pronto.enums import Language
+
 from .models import Faq
 
 COLLECTION = "faqs"
-LANGUAGES = ("it", "en")
 
 
 @cache
@@ -60,17 +61,21 @@ def embed(texts):
     ]
 
 
+def entry_id(faq_id, language):
+    return f"{faq_id}-{language}"
+
+
 def entry_ids(faq_id):
-    return [f"{faq_id}-{language}" for language in LANGUAGES]
+    return [entry_id(faq_id, language) for language in Language.values]
 
 
 def _add(collection, faqs):
-    entries = [(faq, language) for faq in faqs for language in LANGUAGES]
+    entries = [(faq, language) for faq in faqs for language in Language.values]
     if not entries:
         return
     texts = [getattr(faq, f"question_{language}") for faq, language in entries]
     collection.upsert(
-        ids=[f"{faq.pk}-{language}" for faq, language in entries],
+        ids=[entry_id(faq.pk, language) for faq, language in entries],
         embeddings=embed(texts),
         metadatas=[
             {"faq_id": faq.pk, "language": language} for faq, language in entries

@@ -3,7 +3,7 @@ from django.db import models
 from django.db.models import F, Q
 
 from offices.models import Office
-from pronto.enums import AppointmentStatus
+from pronto.enums import AppointmentStatus, Language
 
 
 class EmployeeProfile(models.Model):
@@ -139,7 +139,7 @@ class Appointment(models.Model):
     )
     question_lang = models.CharField(
         max_length=2,
-        choices=[("it", "Italiano"), ("en", "Inglese")],
+        choices=Language.choices,
         verbose_name="lingua della domanda",
     )
     # The FAQ the student was shown and did not find helpful, so the employee

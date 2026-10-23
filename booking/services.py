@@ -253,15 +253,24 @@ def cancel_appointment(appointment, *, by):
 
     `by` is the user cancelling: whoever else is involved is e-mailed once the
     cancellation commits (FR15).
-    """
-    if appointment.status != AppointmentStatus.BOOKED:
-        raise BookingError("Only a booked appointment can be cancelled.")
-    if appointment.slot <= timezone.now():
-        raise BookingError(
-            "An appointment that has already started cannot be cancelled."
-        )
 
+    The appointment is locked and its status read again before the checks, so
+    two cancellations at once — a double click — cannot both pass them and
+    both send the e-mails.
+    """
     with transaction.atomic():
+        appointment.status = (
+            Appointment.objects.select_for_update()
+            .values_list("status", flat=True)
+            .get(pk=appointment.pk)
+        )
+        if appointment.status != AppointmentStatus.BOOKED:
+            raise BookingError("Only a booked appointment can be cancelled.")
+        if appointment.slot <= timezone.now():
+            raise BookingError(
+                "An appointment that has already started cannot be cancelled."
+            )
+
         appointment.status = AppointmentStatus.CANCELLED
         # updated_at is auto_now: left out of update_fields it would not be touched.
         appointment.save(update_fields=["status", "updated_at"])

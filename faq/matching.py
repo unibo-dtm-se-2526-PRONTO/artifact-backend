@@ -159,7 +159,7 @@ class CascadeMatcher:
         return None
 
 
-def find_best_match(question, office_code, language, matcher=None):
+def find_best_match(question, office_code, language):
     """The published FAQ that best answers `question`, or None.
 
     With no `office_code`, every office is searched at once: a student rarely
@@ -170,7 +170,7 @@ def find_best_match(question, office_code, language, matcher=None):
     each step: a FAQ of the chosen office found by semantic search wins over a
     full-text match in another office.
     """
-    matcher = matcher or CascadeMatcher(FullTextMatcher(), SemanticMatcher())
+    matcher = CascadeMatcher(FullTextMatcher(), SemanticMatcher())
     # The office comes along with the FAQ: the answer is reported with it.
     published = Faq.objects.filter(is_active=True).select_related("office")
     if office_code is None:

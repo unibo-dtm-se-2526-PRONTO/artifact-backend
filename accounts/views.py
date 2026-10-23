@@ -11,7 +11,7 @@ from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
 class RegisterView(generics.CreateAPIView):
     """Create an account. Public: the caller has no token yet."""
 
-    serializer_class = RegisterSerializer  # delega tutta la logica al serializer
+    serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
 
 

@@ -26,10 +26,12 @@ What happens to each row:
 
 The import is idempotent. ``(office, question_it)`` is the natural key
 (see ``Faq.Meta``), so running it again updates the FAQs it finds instead of
-duplicating them: the answers and the English question follow the sheet. When
-the sheet has no English answer, the stored one is replaced only while it is
-still the untranslated copy. Whether a FAQ is published is never touched. The whole
-run is one transaction: a failure halfway stores nothing.
+duplicating them. The Italian answer always follows the sheet; so do the
+English question and answer when the sheet has them. When it does not, the
+stored English text is kept if someone translated it in the admin, and
+replaced only while it is still the copy of the Italian one. Whether a FAQ is
+published is never touched. The whole run is one transaction: a failure
+halfway stores nothing.
 """
 
 from collections import Counter
@@ -168,7 +170,7 @@ def import_row(row, publish):
         raise SkippedRow("no answer")
 
     question_it = anonymise(row["domanda"])
-    question_en = anonymise(row.get("question", "")) or question_it
+    sheet_question_en = anonymise(row.get("question", ""))
     answer_it = anonymise(row["risposta"])
     sheet_answer_en = anonymise(row.get("answer", ""))
 
@@ -178,25 +180,21 @@ def import_row(row, publish):
         Faq.objects.create(
             office=office,
             question_it=question_it,
-            question_en=question_en,
+            question_en=sheet_question_en or question_it,
             answer_it=answer_it,
             answer_en=sheet_answer_en or answer_it,
             is_active=publish,
         )
         return "created"
 
-    if sheet_answer_en:
-        answer_en = sheet_answer_en
-    elif faq.answer_en == faq.answer_it:
-        answer_en = answer_it
-    else:
-        # An English answer that differs from the Italian one was written by
-        # someone in the admin: the sheet has nothing better to replace it with.
-        answer_en = faq.answer_en
     changes = {
-        "question_en": question_en,
+        "question_en": english_text(
+            sheet_question_en, faq.question_en, faq.question_it, question_it
+        ),
         "answer_it": answer_it,
-        "answer_en": answer_en,
+        "answer_en": english_text(
+            sheet_answer_en, faq.answer_en, faq.answer_it, answer_it
+        ),
     }
     if all(getattr(faq, field) == value for field, value in changes.items()):
         return "unchanged"
@@ -204,6 +202,19 @@ def import_row(row, publish):
         setattr(faq, field, value)
     faq.save()
     return "updated"
+
+
+def english_text(from_sheet, stored_en, stored_it, italian):
+    """The English text a FAQ keeps on a new import: the sheet's, if it has
+    one; otherwise the Italian one, while the stored English is still the
+    untranslated copy."""
+    if from_sheet:
+        return from_sheet
+    if stored_en == stored_it:
+        return italian
+    # An English text that differs from the Italian one was written by
+    # someone in the admin: the sheet has nothing better to replace it with.
+    return stored_en
 
 
 def office_of(row):

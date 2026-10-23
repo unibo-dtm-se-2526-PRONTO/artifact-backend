@@ -16,6 +16,13 @@ class OfficeCode(models.TextChoices):
     INTERNSHIPS = "INTERNSHIPS", "Tirocini"
 
 
+class Language(models.TextChoices):
+    """The languages questions are asked, and texts stored, in."""
+
+    IT = "it", "Italiano"
+    EN = "en", "Inglese"
+
+
 class Role(models.TextChoices):
     """What a user is allowed to do, derived from their institutional email."""
 

@@ -3,6 +3,7 @@ import uuid
 from django.db import models
 
 from offices.models import Office
+from pronto.enums import Language
 
 
 class Faq(models.Model):
@@ -93,7 +94,7 @@ class Inquiry(models.Model):
     text = models.TextField(verbose_name="domanda")
     language = models.CharField(
         max_length=2,
-        choices=[("it", "Italiano"), ("en", "Inglese")],
+        choices=Language.choices,
         verbose_name="lingua",
     )
     # SET_NULL: retiring a FAQ must not erase the record of what was asked.

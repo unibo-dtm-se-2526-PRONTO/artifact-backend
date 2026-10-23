@@ -26,10 +26,12 @@ What happens to each row:
 
 The import is idempotent. ``(office, question_it)`` is the natural key
 (see ``Faq.Meta``), so running it again updates the FAQs it finds instead of
-duplicating them: the answers and the English question follow the sheet. When
-the sheet has no English question or answer, the stored one is replaced only
-while it is still the untranslated copy. Whether a FAQ is published is never touched. The whole
-run is one transaction: a failure halfway stores nothing.
+duplicating them. The Italian answer always follows the sheet; so do the
+English question and answer when the sheet has them. When it does not, the
+stored English text is kept if someone translated it in the admin, and
+replaced only while it is still the copy of the Italian one. Whether a FAQ is
+published is never touched. The whole run is one transaction: a failure
+halfway stores nothing.
 """
 
 from collections import Counter

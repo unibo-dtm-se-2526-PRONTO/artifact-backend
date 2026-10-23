@@ -312,6 +312,21 @@ def test_running_again_keeps_an_english_answer_written_in_the_admin(tmp_path, wo
 
 
 @pytest.mark.django_db
+def test_running_again_keeps_an_english_question_written_in_the_admin(tmp_path):
+    untranslated = (*ENROLMENT[:3], None, ENROLMENT[4])
+    run(write_workbook(tmp_path / "v1.xlsx", untranslated))
+    Faq.objects.filter(question_it="Come mi iscrivo?").update(
+        question_en="How do I enrol?"
+    )
+
+    run(write_workbook(tmp_path / "v2.xlsx", untranslated))
+
+    assert (
+        Faq.objects.get(question_it="Come mi iscrivo?").question_en == "How do I enrol?"
+    )
+
+
+@pytest.mark.django_db
 def test_running_again_keeps_it_when_the_english_cell_is_empty(tmp_path, workbook):
     run(workbook)
     Faq.objects.filter(question_it="Come mi iscrivo?").update(

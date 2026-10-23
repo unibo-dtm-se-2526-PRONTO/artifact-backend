@@ -14,7 +14,7 @@ from rest_framework import serializers
 from pronto.enums import Language
 
 LANGUAGES = tuple(Language.values)
-DEFAULT_LANGUAGE = "it"
+DEFAULT_LANGUAGE = Language.IT.value
 LANGUAGE_PARAM = "lang"
 
 

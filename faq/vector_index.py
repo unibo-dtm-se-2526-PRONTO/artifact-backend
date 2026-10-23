@@ -21,7 +21,7 @@ from functools import cache
 
 from django.conf import settings
 
-from pronto.i18n import LANGUAGES
+from pronto.enums import Language
 
 from .models import Faq
 
@@ -66,11 +66,11 @@ def entry_id(faq_id, language):
 
 
 def entry_ids(faq_id):
-    return [entry_id(faq_id, language) for language in LANGUAGES]
+    return [entry_id(faq_id, language) for language in Language.values]
 
 
 def _add(collection, faqs):
-    entries = [(faq, language) for faq in faqs for language in LANGUAGES]
+    entries = [(faq, language) for faq in faqs for language in Language.values]
     if not entries:
         return
     texts = [getattr(faq, f"question_{language}") for faq, language in entries]

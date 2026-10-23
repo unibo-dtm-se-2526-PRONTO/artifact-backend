@@ -25,6 +25,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
+# Under pytest, or `manage.py test`: the test database and the test-only
+# fallbacks below apply.
+TESTING = "PYTEST_VERSION" in os.environ or "test" in sys.argv
+
 # The release this code belongs to. semantic-release writes it into
 # pyproject.toml (`poetry version`) on every release, so it is read from there
 # rather than kept twice. A regular expression rather than tomllib, which
@@ -208,7 +212,7 @@ def postgres_from_url(url):
 # TEST_DATABASE_URL runs the same suite against a PostgreSQL server instead,
 # as CI does. Django creates and drops its own test_<name> database there.
 # Development and production keep using the DB_* settings above.
-if "PYTEST_VERSION" in os.environ or "test" in sys.argv:
+if TESTING:
     test_database_url = os.getenv("TEST_DATABASE_URL")
     if test_database_url:
         DATABASES["default"] = postgres_from_url(test_database_url)
@@ -288,7 +292,7 @@ FAQ_MATCH_MIN_RANK = 0.45
 # semantic matching give it an in-memory store of their own.
 CHROMA_HOST = os.getenv("CHROMA_HOST", "")
 CHROMA_PORT = int(os.getenv("CHROMA_PORT") or "8000")
-if "PYTEST_VERSION" in os.environ or "test" in sys.argv:
+if TESTING:
     CHROMA_HOST = ""
 # Multilingual, so Italian and English questions are embedded equally well. It
 # runs on ONNX through fastembed, without PyTorch, and is downloaded on first

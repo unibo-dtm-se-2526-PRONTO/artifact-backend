@@ -8,6 +8,9 @@
     "sara-ladisa"
   ],
   "automerge": true,
+  "baseBranches": [
+    "develop"
+  ],
   "dependencyDashboard": true,
   "git-submodules": {
     "enabled": true

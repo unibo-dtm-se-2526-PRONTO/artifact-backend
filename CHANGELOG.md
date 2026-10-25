@@ -1,3 +1,42 @@
+## [1.0.1](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.0.0...1.0.1) (2026-10-25)
+
+### Bug Fixes
+
+* **booking:** lock the appointment when cancelling it ([b15524a](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/b15524a68d00a7f142dfa4f1a1be4e36ebce0c8c))
+* **deps:** update django, djangorestframework and sqlparse for known vulnerabilities ([401deae](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/401deae779573ecc366c0251e1b356bd241a9643))
+* **docker:** keep nested caches, env variants and local data out of the build context ([4231a03](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/4231a036065f9f99029ababc66cc1aa7bb5e2434))
+* **faq:** keep english questions translated in the admin on re-import ([2a94e7a](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/2a94e7a6cfb312685e58983d35489e67fe3c0d00))
+* **i18n:** keep the default language a plain string for mypy ([a95995f](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/a95995fa9efb6905578ededd0cba7aec1488cc42))
+
+### Documentation
+
+* **faq:** clarify what a re-import keeps of the English texts ([d35c17e](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/d35c17ed9c110ad13e3f1103c610bdc79bc22155))
+
+### Tests
+
+* **booking:** assert the second booking of a full slot is refused ([6301aa4](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/6301aa4da2c80fc2531e4f445f805ec7277a8dc7))
+
+### General maintenance
+
+* clean README ([9c6a5e7](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/9c6a5e705f823306f2bb49cce6abfc3687c2ff26))
+* **docker:** ignore ruff cache and coverage data in the build context ([e160ee7](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/e160ee7c3c69b4b8328990c22b7d27ae0aa263eb))
+* **docker:** publish the backend port on localhost only ([2b1ef7c](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/2b1ef7c3d74f44a6586dd40d7b6ca5dbf08d4291))
+* **docker:** publish the frontend port on localhost only ([783b7f9](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/783b7f9da99b731d915ced8d2675e4727b31672f))
+* remove leftover tutorial comments ([d3f872a](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/d3f872af995e8c0238c3a45ef4e0853b9913eaaa))
+* **renovate:** open dependency PRs against develop ([96529bb](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/96529bbe8846e82f004de7f606c6aa491cfc79a4))
+
+### Style improvements
+
+* **tests:** merge nested with statements ([bb38fe4](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/bb38fe4de3ba572eaca56f909d2d78c7c1fd2b64))
+
+### Refactoring
+
+* **booking:** reuse the weekday labels in the e-mails ([7c028b4](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/7c028b4e92548e0dec2457cdd95e175e810fec75))
+* define the supported languages once ([a00ae81](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/a00ae81af38686b771decc1407c714113382d494))
+* **faq:** drop the unused matcher parameter of find_best_match ([db64c03](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/db64c03ac8372f993f8c2585041237e97e7a6e38))
+* read the supported languages from the enum outside the API layer ([a408121](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/a408121d5bb890eabfe209159bc25aafea2cc206))
+* **settings:** compute the test-run flag once ([0247326](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/02473268cdfc4fb757cef10b6b9bd738a757c2da))
+
 ## 1.0.0 (2026-10-15)
 
 ### Features

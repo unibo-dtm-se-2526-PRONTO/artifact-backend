@@ -3,7 +3,7 @@
 # release.config.mjs). The package holds the Django project and its apps; the
 # frontend is not part of it.
 name = "pronto-helpdesk"
-version = "1.0.0"
+version = "1.0.1"
 packages = [
     { include = "pronto" },
     { include = "accounts" },

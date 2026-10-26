@@ -69,3 +69,8 @@ markers = [
 [tool.mypy]
 # Django does not ship type stubs (no py.typed marker)
 ignore_missing_imports = true
+
+[tool.ruff.lint]
+# Django reads list_display, Meta.fields, a migration's operations and the like
+# as class attributes it never mutates: lists there are the idiom, not a bug.
+ignore = ["RUF012"]

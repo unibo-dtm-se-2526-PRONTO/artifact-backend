@@ -1,0 +1,93 @@
+# Dependabot opens the dependency updates as pull requests against develop,
+# once a week, and they reach master with the next release. Commit messages are
+# Conventional Commits (commitlint checks them like any other pull request):
+# chore(deps) and ci(deps) do not make a release by themselves, which is right
+# for updates that only move poetry.lock, package-lock.json or the workflows.
+# Patch and minor updates merge on their own once CI is green
+# (.github/workflows/dependabot-automerge.yml); majors wait for a person.
+version: 2
+updates:
+  # Poetry: pyproject.toml and poetry.lock
+  - package-ecosystem: pip
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Rome
+    assignees:
+      - sara-ladisa
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # semantic-release and its preset, in package.json
+  - package-ecosystem: npm
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Rome
+    assignees:
+      - sara-ladisa
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Rome
+    assignees:
+      - sara-ladisa
+    commit-message:
+      prefix: ci
+      include: scope
+
+  # The images of the Dockerfiles and of docker-compose.yml: patches only. A new
+  # Python or Node version, or a new PostgreSQL major (which cannot read the data
+  # of the old one), is changed by hand, together with check.yml.
+  - package-ecosystem: docker
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Rome
+    assignees:
+      - sara-ladisa
+    commit-message:
+      prefix: chore
+      include: scope
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+
+  - package-ecosystem: docker-compose
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Rome
+    assignees:
+      - sara-ladisa
+    commit-message:
+      prefix: chore
+      include: scope
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor

@@ -12,8 +12,10 @@ jobs:
   release:
     name: Release
     concurrency:
-      # Only one release job at a time. Strictly sequential.
-      group: deploy
+      # Only one release job at a time on a branch: strictly sequential on
+      # master, where releases are real. The dry runs of other branches and of
+      # pull requests have a group each, so they do not cancel one another.
+      group: deploy-${{ github.ref }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code

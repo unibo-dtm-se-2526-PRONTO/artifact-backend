@@ -331,7 +331,7 @@ def test_completing_sends_nothing(
     # Rewound through a queryset, as the appointment API tests do: a meeting
     # has to be over before it can be completed.
     Appointment.objects.filter(pk=appointment.pk).update(
-        slot=appointment.slot - timedelta(days=7)
+        slot=appointment.slot - timedelta(days=14)
     )
     appointment.refresh_from_db()
 

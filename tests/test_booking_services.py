@@ -88,7 +88,7 @@ def test_available_slots_is_empty_at_the_weekend(office, employee, day):
 
 @pytest.mark.django_db
 def test_available_slots_is_empty_for_a_past_day(office, employee, day):
-    assert available_slots(office, day - timedelta(days=7)) == []
+    assert available_slots(office, day - timedelta(days=14)) == []
 
 
 @pytest.mark.django_db
@@ -276,7 +276,7 @@ def test_book_appointment_reports_a_slot_lost_in_the_race(
 @pytest.mark.django_db
 def test_book_appointment_rejects_a_slot_in_the_past(office, employee, student, day):
     with pytest.raises(BookingError):
-        book(student, office, slot_at(day - timedelta(days=7), 9))
+        book(student, office, slot_at(day - timedelta(days=14), 9))
 
 
 @pytest.mark.django_db
@@ -365,7 +365,7 @@ def test_cancel_appointment_rejects_a_past_appointment(office, employee, student
         student=student,
         office=office,
         employee=employee,
-        slot=slot_at(day - timedelta(days=7), 9),
+        slot=slot_at(day - timedelta(days=14), 9),
         question_text="Domanda di ieri.",
         question_lang="it",
     )
@@ -388,7 +388,7 @@ def past_appointment(student, office, employee, day, status=AppointmentStatus.BO
         student=student,
         office=office,
         employee=employee,
-        slot=slot_at(day - timedelta(days=7), 9),
+        slot=slot_at(day - timedelta(days=14), 9),
         status=status,
         question_text="Domanda della settimana scorsa.",
         question_lang="it",

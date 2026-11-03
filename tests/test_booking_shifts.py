@@ -385,7 +385,7 @@ def test_withdraw_shift_ignores_past_appointments(office, employee, student, day
         student=student,
         office=office,
         employee=employee,
-        slot=slot_at(day - timedelta(days=7), 10),
+        slot=slot_at(day - timedelta(days=14), 10),
         status=AppointmentStatus.BOOKED,
         question_text="Domanda della settimana scorsa.",
         question_lang="it",

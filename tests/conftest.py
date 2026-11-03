@@ -65,7 +65,11 @@ WORKING_WEEK = [(weekday, time(9), time(17)) for weekday in range(5)]
 
 
 def next_working_day():
-    """The next Monday: always a weekday, always in the future."""
+    """The next Monday: always a weekday, always in the future.
+
+    On a Monday it is a week away, so `day - 7 days` is today and its morning
+    slots may still be ahead: a slot meant to be over goes two weeks back.
+    """
     today = timezone.localtime(timezone.now()).date()
     return today + timedelta(days=(7 - today.weekday()) or 7)
 

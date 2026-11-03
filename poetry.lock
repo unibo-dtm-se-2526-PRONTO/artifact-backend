@@ -350,7 +350,7 @@ description = "Timeout context manager for asyncio programs"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"},
     {file = "async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3"},
@@ -743,7 +743,7 @@ description = "Colored terminal output for Python's logging module"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "coloredlogs-15.0.1-py2.py3-none-any.whl", hash = "sha256:612ee75c546f53e92e70049c9dbfcc18c935a2b9a53b66085ce9ef6a6e5c0934"},
     {file = "coloredlogs-15.0.1.tar.gz", hash = "sha256:7c991aa71a4577af2f82600d8f8f3a89f936baeaf9b50a9c197da014e5bf16b0"},
@@ -972,7 +972,7 @@ description = "Backport of PEP 654 (exception groups)"
 optional = false
 python-versions = ">=3.7"
 groups = ["main", "dev"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "exceptiongroup-1.3.1-py3-none-any.whl", hash = "sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598"},
     {file = "exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219"},
@@ -986,42 +986,42 @@ test = ["pytest (>=6)"]
 
 [[package]]
 name = "fastembed"
-version = "0.9.0"
+version = "0.9.1"
 description = "Fast, light, accurate library built for retrieval embedding generation"
 optional = false
 python-versions = ">=3.10.0"
 groups = ["main"]
 files = [
-    {file = "fastembed-0.9.0-py3-none-any.whl", hash = "sha256:273d408edec8c0f161711d8f6e44e4a5b559d18e8edf6bf805415d55dc772846"},
-    {file = "fastembed-0.9.0.tar.gz", hash = "sha256:bc3beadb46ecb3580ab832d12670be7ecb937f80adfcb7b77b03f7eef76c394a"},
+    {file = "fastembed-0.9.1-py3-none-any.whl", hash = "sha256:95042ac7f685bda6697861066d49f8b119fbde8b75ed5162bbb7e84e2dad0e1d"},
+    {file = "fastembed-0.9.1.tar.gz", hash = "sha256:8b4b2881ea85a4d36e8f284466671437b3fed869c33cdc71d6f6c48ddff115c7"},
 ]
 
 [package.dependencies]
 huggingface-hub = ">=0.20,<2.0"
-loguru = ">=0.7.2,<0.8.0"
+loguru = ">=0.7.2,<0.8"
 mmh3 = ">=4.1.0,<6.0.0"
 numpy = [
-    {version = ">=1.21,<2.3.0", markers = "python_version == \"3.10\""},
-    {version = ">=1.21", markers = "python_version == \"3.11\""},
-    {version = ">=1.26", markers = "python_version == \"3.12\""},
-    {version = ">=2.1.0", markers = "python_version == \"3.13\""},
-    {version = ">=2.3.0", markers = "python_version >= \"3.14\""},
+    {version = ">=1.21,<2.3.0", markers = "python_full_version == \"3.10.*\""},
+    {version = ">=1.21", markers = "python_full_version == \"3.11.*\""},
+    {version = ">=1.26", markers = "python_full_version == \"3.12.*\""},
+    {version = ">=2.1.0", markers = "python_full_version == \"3.13.*\""},
+    {version = ">=2.3.0", markers = "python_full_version >= \"3.14.0\""},
 ]
 onnxruntime = [
-    {version = ">=1.17.0,!=1.20.0,<1.24", markers = "python_version == \"3.10\""},
-    {version = ">1.21.0,!=1.24.0,!=1.24.1", markers = "python_version == \"3.13\""},
-    {version = ">=1.17.0,!=1.20.0,!=1.24.0,!=1.24.1", markers = "python_version >= \"3.11\" and python_version < \"3.13\""},
-    {version = ">=1.24.2", markers = "python_version >= \"3.14\""},
+    {version = ">=1.17.0,!=1.20.0,<1.24", markers = "python_full_version == \"3.10.*\""},
+    {version = ">1.21.0,!=1.24.0,!=1.24.1", markers = "python_full_version == \"3.13.*\""},
+    {version = ">=1.17.0,!=1.20.0,!=1.24.0,!=1.24.1", markers = "python_full_version >= \"3.11.0\" and python_full_version < \"3.13.0\""},
+    {version = ">=1.24.2", markers = "python_full_version >= \"3.14.0\""},
 ]
 pillow = [
-    {version = ">=11.0.0,<13.0", markers = "python_version == \"3.13\""},
-    {version = ">=10.3.0,<13.0", markers = "python_version >= \"3.10\" and python_version < \"3.13\""},
-    {version = ">=12.0.0,<13.0", markers = "python_version >= \"3.14\""},
+    {version = ">=11.0.0,<14.0", markers = "python_full_version == \"3.13.*\""},
+    {version = ">=10.3.0,<14.0", markers = "python_full_version >= \"3.10.0\" and python_full_version < \"3.13.0\""},
+    {version = ">=12.0.0,<14.0", markers = "python_full_version >= \"3.14.0\""},
 ]
-py-rust-stemmers = ">=0.1.0,<0.2.0"
-requests = ">=2.31,<3.0"
+py-rust-stemmers = ">=0.1.0,<0.2"
+requests = ">=2.31,<3"
 tokenizers = ">=0.15,<1.0"
-tqdm = ">=4.66,<5.0"
+tqdm = ">=4.66,<5"
 
 [[package]]
 name = "filelock"
@@ -1515,7 +1515,7 @@ description = "Human friendly output for text interfaces using Python"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "humanfriendly-10.0-py2.py3-none-any.whl", hash = "sha256:1697e1a8a8f550fd43c2865cd84542fc175a61dcb779b6fee18cf6b6ccba1477"},
     {file = "humanfriendly-10.0.tar.gz", hash = "sha256:6b0b831ce8f15f7300721aa49829fc4e83921a9a301cc7f606be6686a2288ddc"},
@@ -1546,7 +1546,7 @@ description = "Read metadata from Python packages"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\" and python_full_version < \"3.10.2\""
+markers = "python_full_version == \"3.10.*\" and python_full_version < \"3.10.2\""
 files = [
     {file = "importlib_metadata-9.0.1-py3-none-any.whl", hash = "sha256:bba5600596a7e21f3eef53281cf28d6a5195634d2f2b78ff9501a3272c6eaab0"},
     {file = "importlib_metadata-9.0.1.tar.gz", hash = "sha256:ab830580bc0ef3db61ce8fae716389e5462b67e033018bab6d8f80ef17172f99"},
@@ -2048,7 +2048,7 @@ description = "Python library for arbitrary-precision floating-point arithmetic"
 optional = false
 python-versions = "*"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"},
     {file = "mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f"},
@@ -2343,7 +2343,7 @@ description = "Fundamental package for array computing in Python"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "numpy-2.2.6-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:b412caa66f72040e6d268491a59f2c43bf03eb6c96dd8f0307829feb7fa2b6fb"},
     {file = "numpy-2.2.6-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:8e41fd67c52b86603a91c1a505ebaef50b3314de0213461c7a6e99c9a3beff90"},
@@ -2409,7 +2409,7 @@ description = "Fundamental package for array computing in Python"
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
-markers = "python_version == \"3.11\""
+markers = "python_full_version == \"3.11.*\""
 files = [
     {file = "numpy-2.4.6-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:0280e0356c0829a18d9de1cb7eee50ec22ca639878d7240307ca0943d73cd2c4"},
     {file = "numpy-2.4.6-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:110f8b71aacb688ec69062bb7f6938a0f8acb01b7c1c4beb453c65b6d234584d"},
@@ -2586,7 +2586,7 @@ description = "ONNX Runtime is a runtime accelerator for Machine Learning models
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "onnxruntime-1.23.2-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:a7730122afe186a784660f6ec5807138bf9d792fa1df76556b27307ea9ebcbe3"},
     {file = "onnxruntime-1.23.2-cp310-cp310-macosx_13_0_x86_64.whl", hash = "sha256:b28740f4ecef1738ea8f807461dd541b8287d5650b5be33bca7b474e3cbd1f36"},
@@ -3854,7 +3854,7 @@ description = "A python implementation of GNU readline."
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "sys_platform == \"win32\" and python_version == \"3.10\""
+markers = "sys_platform == \"win32\" and python_full_version == \"3.10.*\""
 files = [
     {file = "pyreadline3-3.5.6-py3-none-any.whl", hash = "sha256:8449b734232e42a5dcd74048e39b60db2839a4c38cf3ae2bf7707d58b5389c0d"},
     {file = "pyreadline3-3.5.6.tar.gz", hash = "sha256:61e53218b99656091ddb077df9e71f25850e72e030b6183b39c9b7e6e4f4a9bf"},
@@ -4099,7 +4099,7 @@ description = "Python bindings to Rust's persistent data structures (rpds)"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "rpds_py-0.30.0-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:679ae98e00c0e8d68a7fda324e16b90fd5260945b45d3b824c892cec9eea3288"},
     {file = "rpds_py-0.30.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:4cc2206b76b4f576934f0ed374b10d7ca5f457858b157ca52064bdfc26b9fc00"},
@@ -4420,7 +4420,7 @@ description = "Computer algebra system (CAS) in Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"},
     {file = "sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517"},
@@ -4490,7 +4490,7 @@ description = "A lil' TOML parser"
 optional = false
 python-versions = ">=3.8"
 groups = ["main", "dev"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "tomli-2.3.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:88bd15eb972f3664f5ed4b57c1634a97153b4bac4479dcb6a495f41921eb7f45"},
     {file = "tomli-2.3.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:883b1c0d6398a6a9d29b508c331fa56adbcdff647f6ace4dfca0f50e90dfd0ba"},
@@ -4806,7 +4806,7 @@ description = "An implementation of the WebSocket Protocol (RFC 6455 & 7692)"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\""
+markers = "python_full_version == \"3.10.*\""
 files = [
     {file = "websockets-16.1.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:49ae99bdfcae803a885c926bf14f886196e84925395bb3f568fef5c0f0979d7d"},
     {file = "websockets-16.1.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5bfd1ac19b1b9986a9c95a82d5e23a391ebb09e12c34d7be6094b86efcc35731"},
@@ -5254,7 +5254,7 @@ description = "Backport of pathlib-compatible object wrapper for zip files"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\" and python_full_version < \"3.10.2\""
+markers = "python_full_version == \"3.10.*\" and python_full_version < \"3.10.2\""
 files = [
     {file = "zipp-4.1.0-py3-none-any.whl", hash = "sha256:25ad4e16390cd314347dd8f1de67a2ac538ae658ed4ab9db16029c07c188e97f"},
     {file = "zipp-4.1.0.tar.gz", hash = "sha256:4cb57381f544315db7688e976e922a2b18cdb513d21cc194eb42232ba2a3e602"},

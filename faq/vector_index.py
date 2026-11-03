@@ -1,20 +1,8 @@
-"""The vector store behind semantic FAQ matching (IR4).
+"""The Chroma vector store for semantic FAQ matching (IR4).
 
-Chroma keeps one entry per published FAQ and language: the embedding of the
-FAQ's question in that language, with the FAQ's id and the language as
-metadata. The question alone, not the answer: students ask questions, and a
-paraphrase of a question sits closer to it than to the paragraph that answers
-it. The entries are derived from the database and never edited by hand, so
-they can be rebuilt at any time (`rebuild_faq_index`).
-
-The embeddings are computed here, with fastembed, and handed to Chroma ready
-made: Chroma stores and searches vectors, it never embeds anything itself. The
-model is loaded once per process, on the first text that needs it.
-
-Semantic matching is optional. With ``CHROMA_HOST`` empty, `get_collection`
-returns None and every function here does nothing; when the server cannot be
-reached, the calls raise and their callers (the signals and the matcher) log
-the error and carry on without it.
+One entry per published FAQ and language: the embedding of its question,
+computed here with fastembed. With ``CHROMA_HOST`` empty everything here is a
+no-op. `rebuild_faq_index` rebuilds it from the database.
 """
 
 from functools import cache
@@ -36,8 +24,7 @@ def _client(host, port):
 
 
 def get_collection():
-    """The Chroma collection of FAQ embeddings, or None when semantic
-    matching is off."""
+    """The Chroma collection, or None when semantic matching is off."""
     if not settings.CHROMA_HOST:
         return None
     return _client(settings.CHROMA_HOST, settings.CHROMA_PORT).get_or_create_collection(
@@ -85,8 +72,7 @@ def _add(collection, faqs):
 
 
 def sync_faq(faq_id):
-    """Bring the entries of one FAQ in line with the database: written if the
-    FAQ is published, removed if it is not, or no longer exists."""
+    """Write the FAQ's entries if it is published, remove them otherwise."""
     collection = get_collection()
     if collection is None:
         return
@@ -98,12 +84,10 @@ def sync_faq(faq_id):
 
 
 def rebuild():
-    """Index every published FAQ again, dropping whatever else is stored.
-    Returns how many FAQs were indexed.
+    """Index every published FAQ again and drop the rest; returns the count.
 
-    The new entries are written before the old ones are dropped, so a failure
-    halfway (the model cannot be downloaded, say) leaves the store as it was
-    rather than empty."""
+    Writes before deleting, so a failure leaves the old index in place.
+    """
     collection = get_collection()
     if collection is None:
         return 0
@@ -119,8 +103,7 @@ def rebuild():
 
 
 def nearest(question, language, faq_ids):
-    """The FAQ among `faq_ids` whose question in `language` is closest to
-    `question`, as ``(faq_id, cosine similarity)``; None if there is none."""
+    """``(faq_id, cosine similarity)`` of the closest FAQ in `faq_ids`, or None."""
     collection = get_collection()
     if collection is None or not faq_ids:
         return None

@@ -1,17 +1,7 @@
-"""Finding the published FAQ that best answers a student's question (FR7).
+"""Find the published FAQ that best answers a question (FR7).
 
-Two layers, so that another way of scoring can be added later without touching
-the rest. A *matcher* answers one narrow question — which FAQ among these
-candidates is the best answer, if any is relevant enough — with its own notion
-of score and threshold. `find_best_match` holds the policy on top: the office
-the student chose first, every office after.
-
-There are two matchers, tried in cascade (`CascadeMatcher`). PostgreSQL
-full-text search goes first: it is exact about the words the FAQs use (office
-names, portals, acronyms such as ER.GO). Only when it finds nothing relevant
-enough is semantic search over embeddings asked (Chroma, IR4), which finds a
-FAQ worded differently from the question. Each keeps its own score and
-threshold, which are never compared: a match says which matcher found it.
+Full-text search first; semantic search (Chroma, IR4) only if it finds
+nothing. Their scores are never compared.
 """
 
 import logging
@@ -30,8 +20,6 @@ from .models import Faq, MatchMethod
 
 logger = logging.getLogger(__name__)
 
-# The PostgreSQL text search configuration for each language the FAQs are
-# written in: it decides the stemmer and the stop words.
 SEARCH_CONFIGS = {"it": "italian", "en": "english"}
 
 WORD = re.compile(r"\w+")
@@ -66,21 +54,8 @@ class Matcher(Protocol):
 class FullTextMatcher:
     """Ranks FAQs with PostgreSQL full-text search.
 
-    The question is stemmed and stripped of stop words with the configuration
-    of its language, then compared with the FAQ's text in that same language:
-    its question weighted A, its answer B, so a word the FAQ is *about* counts
-    more than one its answer happens to mention.
-
-    The words of the question are OR-ed rather than AND-ed. A student writes a
-    sentence, not a query, and requiring every word ("vorrei", "sapere", ...)
-    would leave almost every question without a match. `ts_rank` averages over
-    the words of the query, so a FAQ scores by the share of the question it
-    covers, and scores stay comparable between short and long questions;
-    ``FAQ_MATCH_MIN_RANK`` is the share below which a FAQ is not suggested.
-
-    The vectors are computed on the fly rather than stored and indexed: the
-    knowledge base is a few hundred rows per language at most, and a GIN index
-    would only pay for itself well beyond that.
+    The FAQ question weighs more than the answer, and the words of the student's
+    question are OR-ed, since it is a sentence, not a query.
     """
 
     def best_match(self, question, language, candidates):
@@ -93,8 +68,6 @@ class FullTextMatcher:
         document = SearchVector(
             f"question_{language}", weight="A", config=config
         ) + SearchVector(f"answer_{language}", weight="B", config=config)
-        # websearch never raises on malformed input, and the question has been
-        # reduced to bare words anyway: "or" is the only operator it sees.
         query = SearchQuery(
             " or ".join(WORD.findall(question)),
             config=config,
@@ -112,18 +85,10 @@ class FullTextMatcher:
 
 
 class SemanticMatcher:
-    """Ranks FAQs by the cosine similarity between the embedding of the
-    question and that of each FAQ's question, in the same language (see
-    `faq.vector_index`). ``FAQ_SEMANTIC_MIN_SIMILARITY`` is the similarity
-    below which a FAQ is not suggested.
+    """Ranks FAQs by cosine similarity of the question embeddings.
 
-    The search is restricted to the candidates' ids, so the database still
-    decides what may be suggested: a FAQ unpublished while the vector store
-    was down is not suggested even if its entries are still there.
-
-    Semantic matching is an extra: with it off, or its store unreachable, this
-    matcher finds nothing, and the error is logged rather than raised, so the
-    student still gets the full-text answer, or the way to book.
+    Limited to the candidates' ids. If the store is unreachable it logs the
+    error and finds nothing.
     """
 
     def best_match(self, question, language, candidates):
@@ -162,16 +127,9 @@ class CascadeMatcher:
 def find_best_match(question, office_code, language):
     """The published FAQ that best answers `question`, or None.
 
-    With no `office_code`, every office is searched at once: a student rarely
-    knows which office a question belongs to. With one, that office is
-    searched first, and only if nothing there is relevant enough are all the
-    offices searched, so a student who picked the wrong office still gets an
-    answer, and the match tells them whose it is. The cascade runs whole in
-    each step: a FAQ of the chosen office found by semantic search wins over a
-    full-text match in another office.
+    With `office_code`, that office is searched first, then all of them.
     """
     matcher = CascadeMatcher(FullTextMatcher(), SemanticMatcher())
-    # The office comes along with the FAQ: the answer is reported with it.
     published = Faq.objects.filter(is_active=True).select_related("office")
     if office_code is None:
         return matcher.best_match(question, language, published)

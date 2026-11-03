@@ -1,14 +1,7 @@
 """Tests for the booking rules under simultaneous requests (NFR1).
 
-The other booking tests run one request at a time, so they cannot tell a rule
-the database enforces from one that only holds while nobody else is writing.
-Here several threads call the same service at once, each on its own database
-connection and in its own transaction, as concurrent HTTP requests would.
-
-They are marked `postgres`: SQLite locks the whole database on every write, so
-the requests would be serialised and the tests would pass for the wrong reason.
-They also need `transaction=True`, since the default test transaction would
-hide each thread's writes from the others until the end of the test.
+Threads with their own connections. Marked `postgres` (SQLite locks the
+whole database) and `transaction=True` so the threads see each other's writes.
 """
 
 import threading
@@ -37,14 +30,9 @@ pytestmark = [pytest.mark.postgres, pytest.mark.django_db(transaction=True)]
 
 
 def run_together(*calls):
-    """Run each of `calls` in its own thread, all released at the same moment.
+    """Run `calls` in threads released together by a barrier.
 
-    Returns, in the order of `calls`, what each one returned or the exception
-    it raised. A barrier holds every thread until all of them are ready, so
-    the calls overlap instead of running one after the other as the threads
-    happen to start. Each thread closes its connection when done: Django opens
-    one per thread, and a connection left open would keep the test database
-    from being flushed.
+    Returns what each one returned or raised, in order.
     """
     barrier = threading.Barrier(len(calls), timeout=10)
     outcomes = [None] * len(calls)
@@ -74,12 +62,7 @@ def run_together(*calls):
 
 
 def test_simultaneous_bookings_never_double_book_an_employee(office, day):
-    """More students than employees on duty ask for the same slot at once.
-
-    Every employee on duty ends up with exactly one appointment, and every
-    other student is told the slot is gone: the partial unique index settles
-    each lost race, and seq2 moves the loser on to a colleague still free.
-    """
+    """More students than employees on duty ask for the same slot at once."""
     employees = [make_employee(office, email=f"employee{n}@unibo.it") for n in range(3)]
     students = [
         make_user(f"student{n}@studio.unibo.it", User.Role.STUDENT) for n in range(8)
@@ -111,16 +94,11 @@ def test_simultaneous_bookings_never_double_book_an_employee(office, day):
 
 
 def test_simultaneous_overlapping_shifts_are_not_both_declared(office):
-    """Two overlapping shifts declared at once: one is recorded, one refused.
-
-    Each call checks for overlaps before inserting, so without the lock on the
-    employee both checks could pass before either insert.
-    """
+    """Two overlapping shifts declared at once: one is recorded, one refused."""
     employee = make_employee(office, shifts=[])
 
     def declaring(start, end):
-        # A fresh instance per thread: model instances are not meant to be
-        # shared across threads, and each call reads the employee's office.
+        # A fresh instance per thread.
         return lambda: declare_shift(
             employee=EmployeeProfile.objects.get(pk=employee.pk),
             weekday=0,
@@ -144,14 +122,9 @@ def test_simultaneous_overlapping_shifts_are_not_both_declared(office):
 def test_a_shift_withdrawn_mid_booking_leaves_no_appointment_uncovered(
     office, day, monkeypatch
 ):
-    """The shift goes after the booking has picked its employee, before insert.
+    """The shift is withdrawn after the booking picks its employee, before insert.
 
-    Left to chance this interleaving is rare, so the test forces it: the
-    booking pauses right after choosing the employee, and the withdrawal runs
-    to completion in that gap. The withdrawal finds nothing booked and
-    succeeds; the booking must then notice that its employee is no longer on
-    duty, rather than insert an appointment no shift covers — the very state
-    `withdraw_shift` exists to refuse.
+    The booking must notice that its employee is no longer on duty.
     """
     employee = make_employee(office, shifts=[(day.weekday(), time(9), time(17))])
     shift = employee.shifts.get()
@@ -200,12 +173,7 @@ def test_a_shift_cannot_be_withdrawn_under_a_booking_not_yet_committed(
 ):
     """The withdrawal comes after the insert, before the booking commits.
 
-    The appointment is not visible to other transactions yet, so the check in
-    `withdraw_shift` would find nothing held and delete the shift. The lock on
-    the employee makes the withdrawal wait for the booking to commit, and then
-    it sees the appointment and refuses. The booking pauses inside its
-    transaction — in the notification call, the last step before the commit —
-    long enough for the withdrawal to reach the lock.
+    The lock on the employee makes it wait, then refuse.
     """
     employee = make_employee(office, shifts=[(day.weekday(), time(9), time(17))])
     shift = employee.shifts.get()
@@ -217,8 +185,7 @@ def test_a_shift_cannot_be_withdrawn_under_a_booking_not_yet_committed(
 
     def notify_after_a_pause(appointment):
         inserted.set()
-        # Not an event the withdrawal sets: with the lock in place it is
-        # blocked until this transaction ends, so it could never set it.
+        # The withdrawal is blocked by the lock, so it cannot set an event.
         pytime.sleep(0.5)
         appointment_booked(appointment)
 
@@ -249,13 +216,9 @@ def test_a_shift_cannot_be_withdrawn_under_a_booking_not_yet_committed(
 
 
 def test_simultaneous_cancellations_send_the_emails_once(office, day, monkeypatch):
-    """A student cancels the same appointment twice at once, as a double click
-    would: one call cancels, the other is refused, and nobody is told twice.
+    """A student cancels the same appointment twice at once (double click).
 
-    Each call holds an instance loaded while the appointment was still booked,
-    as two requests would. The first pauses in the notification call, inside
-    its transaction, long enough for the second to reach the status check:
-    without the lock both would pass it.
+    One call cancels, the other is refused, and nobody is told twice.
     """
     make_employee(office)
     student = make_user("mario.rossi@studio.unibo.it", User.Role.STUDENT)

@@ -10,7 +10,6 @@ from .models import Faq, Inquiry
 class FaqSerializer(serializers.ModelSerializer):
     """One published question and answer, in the language the caller asked for."""
 
-    # The office by its code, under the name the API has always used for it.
     office_code = serializers.CharField(source="office.code", read_only=True)
     question = TranslatedField()
     answer = TranslatedField()
@@ -21,21 +20,11 @@ class FaqSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-# Longer than any question a student types into a form, short enough that the
-# search never has to rank an essay.
 QUESTION_MAX_LENGTH = 1000
 
 
 class QuestionSerializer(serializers.Serializer):
-    """What a student sends to ask: a free-text question and, optionally, an
-    office, by its code. Without one, every office is searched.
-
-    Any office will do, not only those taking bookings: a question can be
-    answered even where no one can be booked. The code is checked against
-    `OfficeCode` first, so an unknown one is refused with the error a choice
-    field gives; a valid code whose office does not exist in this database
-    gets the same answer, as there is nothing to file the question under.
-    """
+    """A free-text question and, optionally, an office code."""
 
     office = serializers.ChoiceField(choices=OfficeCode.choices, required=False)
     question = serializers.CharField(max_length=QUESTION_MAX_LENGTH)
@@ -60,13 +49,9 @@ class SuggestedFaqSerializer(serializers.ModelSerializer):
 
 
 class InquirySerializer(serializers.ModelSerializer):
-    """A question as the student sees it: what was asked, and what was found.
+    """A question and the FAQ found for it; ``match`` is null if none.
 
-    ``match`` is null when no FAQ was relevant enough; otherwise its ``office``
-    is the office the answer belongs to, and ``office_reassigned`` flags that
-    it is not the one the student chose, so the client can offer to book with
-    the right office. Texts are in the language the question was asked in,
-    whatever the request that reads it back.
+    ``office_reassigned`` says the answer belongs to another office.
     """
 
     office = serializers.CharField(

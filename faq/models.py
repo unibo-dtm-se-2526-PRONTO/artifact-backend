@@ -9,19 +9,12 @@ from pronto.enums import Language
 class Faq(models.Model):
     """A published question and answer pair, filed under one office."""
 
-    # PROTECT: an office with FAQs filed under it must be emptied deliberately,
-    # never by deleting the office. An office that stops working is made
-    # inactive instead, which keeps its FAQs searchable.
     office = models.ForeignKey(
         Office,
         on_delete=models.PROTECT,
         related_name="faqs",
         verbose_name="ufficio",
     )
-    # Text rather than a 255-character column: the helpdesk's questions are
-    # sometimes a paragraph of context, and they are stored as asked. The
-    # unique constraint below indexes the Italian one, which PostgreSQL allows
-    # up to about 2,700 bytes — far beyond any question in the knowledge base.
     question_it = models.TextField(verbose_name="domanda (italiano)")
     question_en = models.TextField(verbose_name="domanda (inglese)")
     answer_it = models.TextField(verbose_name="risposta (italiano)")
@@ -39,8 +32,7 @@ class Faq(models.Model):
         verbose_name_plural = "FAQ"
         ordering = ["office__code", "question_it"]
         constraints = [
-            # The natural key: seeding the same FAQ twice updates the existing
-            # row instead of duplicating it, so the seed script stays idempotent.
+            # The natural key used by import_faqs.
             models.UniqueConstraint(
                 fields=["office", "question_it"],
                 name="unique_faq_per_office_and_question",
@@ -59,25 +51,13 @@ class MatchMethod(models.TextChoices):
 
 
 class Inquiry(models.Model):
-    """A question a student asked about an office, and the FAQ it was matched to.
+    """A question a student asked, and the FAQ it was matched to.
 
-    Two links are missing on purpose. There is no user: the questions are kept
-    to learn what the knowledge base lacks, and that needs the text, not who
-    wrote it. There is no appointment either: if the answer does not help, the
-    student books through the booking API, which records the suggested FAQ on
-    the appointment itself, so the dependency keeps running from `booking` to
-    `faq` and never back.
-
-    The primary key is a UUID because it is handed to the client, which quotes
-    it back to mark the question resolved: a sequential id would let anyone
-    resolve, or count, the questions of everybody else.
+    No link to the user, by design. The UUID key is given to the client to mark
+    the question resolved, so it must not be guessable.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # PROTECT, as for a FAQ: the questions are the record of what students
-    # needed from an office, and deleting the office must not erase it.
-    # Nullable because a student need not choose an office: the question is
-    # then filed under the office of the suggested FAQ, or under none.
     office = models.ForeignKey(
         Office,
         on_delete=models.PROTECT,
@@ -97,7 +77,6 @@ class Inquiry(models.Model):
         choices=Language.choices,
         verbose_name="lingua",
     )
-    # SET_NULL: retiring a FAQ must not erase the record of what was asked.
     matched_faq = models.ForeignKey(
         Faq,
         on_delete=models.SET_NULL,
@@ -112,8 +91,7 @@ class Inquiry(models.Model):
         verbose_name="punteggio",
         help_text="La pertinenza della FAQ proposta; vuoto se non ne è stata trovata una.",
     )
-    # Not in the API: the student needs the answer, not how it was found. It
-    # is here to read the score, whose scale depends on the method.
+    # Admin only: says which scale the score is on.
     matched_by = models.CharField(
         max_length=16,
         choices=MatchMethod.choices,

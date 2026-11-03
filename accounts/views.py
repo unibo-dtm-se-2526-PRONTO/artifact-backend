@@ -25,10 +25,7 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
         token, _ = Token.objects.get_or_create(user=user)
-        # Sent by django.contrib.auth.login() for a session login, which this
-        # view does not open. Sending it here runs the same receivers, among
-        # them Django's own update_last_login, so last_login records token
-        # logins too: NULL means the user has never logged in.
+        # Updates last_login, as a session login would.
         user_logged_in.send(sender=user.__class__, request=request, user=user)
         return Response({"token": token.key}, status=status.HTTP_200_OK)
 

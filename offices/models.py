@@ -4,16 +4,7 @@ from pronto.enums import OfficeCode
 
 
 class Office(models.Model):
-    """A helpdesk office: what students ask about and book appointments with.
-
-    An app of its own because both `faq` and `booking` file their rows under an
-    office, and neither should have to depend on the other for it. It depends
-    on neither in turn: everything here is about the office itself.
-
-    ``code`` is the stable identifier the API and the frontend use; the display
-    names are stored per language so the API can answer in the language the
-    student asked in.
-    """
+    """A helpdesk office; ``code`` is the identifier the API uses."""
 
     code = models.CharField(
         max_length=32,

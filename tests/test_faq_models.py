@@ -12,8 +12,7 @@ from tests.conftest import office_for
 
 
 def faq(**overrides):
-    """A valid, unsaved FAQ, filed under Guidance unless `office` says
-    otherwise; pass keyword arguments to vary one field."""
+    """A valid, unsaved FAQ under Guidance; keyword arguments override fields."""
     if "office" not in overrides:
         overrides["office"] = office_for(OfficeCode.GUIDANCE)
     fields = {
@@ -56,11 +55,7 @@ def test_creation_and_update_timestamps_are_set_automatically():
 def test_updating_a_faq_moves_the_updated_timestamp_forward():
     stored = faq()
     stored.save()
-    # Two saves in a row can read the same clock tick — on Windows the clock
-    # is coarse enough that they often do — and the timestamp would then stay
-    # put. Moving the first one back an hour makes "forward" observable
-    # whatever the clock's resolution. `update()` skips auto_now, so the value
-    # written is the one given.
+    # Move the first save back an hour, since the clock may be coarse.
     first_update = stored.updated_at - timedelta(hours=1)
     Faq.objects.filter(pk=stored.pk).update(updated_at=first_update)
     stored.refresh_from_db()

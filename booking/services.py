@@ -1,17 +1,8 @@
-"""The booking rules: when an office is free, and who takes a booking.
+"""Booking rules: when an office is free and who takes a booking.
 
-This module exists because of an invariant the schema cannot express (see
-``booking.models.Appointment``): an appointment's employee must work for the
-appointment's office. Here the employee is *chosen from* ``office.employees``,
-so the invariant holds by construction, and every booking goes through this
-one door.
-
-Availability is derived, never stored (FR4). An office's day is laid on a grid
-that starts at midnight and steps by ``office.slot_duration_minutes``; a slot
-on that grid is open when an employee has a shift covering the whole of it,
-and bookable while one of those employees is free. Shifts go through this
-module too, so the grid and the booked appointments are checked on the way in
-and on the way out.
+Every booking goes through here, so the employee always works for the office.
+Availability is computed from the shifts, never stored (FR4): a day is a grid
+of `office.slot_duration_minutes` slots starting at midnight.
 """
 
 from datetime import datetime, time
@@ -33,10 +24,7 @@ class BookingError(Exception):
 
 
 class ShiftInUseError(BookingError):
-    """A shift that cannot be withdrawn: booked appointments still fall in it.
-
-    Carries them, so the employee is told which ones to cancel first.
-    """
+    """A shift that still covers booked appointments, listed in `appointments`."""
 
     def __init__(self, appointments):
         super().__init__(
@@ -57,13 +45,7 @@ def _is_on_grid(moment, step):
 
 
 def _roster(office, day):
-    """Who is on duty in each slot of `office`'s `day`: ``{slot: {employee_id}}``.
-
-    Only slots some shift covers whole appear, so the keys are exactly the
-    office's opening grid for that day. A shift that no longer sits on the grid
-    — the office's slot length changed after it was declared — offers the
-    slots it still covers and nothing past its end.
-    """
+    """Who is on duty in each slot of `office`'s `day`: ``{slot: {employee_id}}``."""
     step = office.slot_duration_minutes
     roster = {}
     shifts = Shift.objects.filter(
@@ -74,8 +56,7 @@ def _roster(office, day):
         # The first grid point at or after the start of the shift.
         start = -(-_minutes(start_time) // step) * step
         for minute in range(start, _minutes(end_time) - step + 1, step):
-            # Built from the wall clock, not by adding minutes to midnight, so
-            # a DST change on the day does not shift every slot by an hour.
+            # From the wall clock, so a DST change does not shift the slots.
             slot = timezone.make_aware(
                 datetime.combine(day, time(minute // 60, minute % 60))
             )
@@ -101,11 +82,7 @@ def _on_duty(office, slot):
 
 
 def available_slots(office, day):
-    """The slots of `day` a student can still book at `office`.
-
-    A slot survives while at least one employee on duty in it is free: the
-    office is as available as its least busy member of staff.
-    """
+    """The future slots of `day` where at least one employee on duty is free."""
     if not office.is_active:
         return []
 
@@ -129,11 +106,8 @@ def book_appointment(
 ):
     """Book `slot` at `office` for `student`, assigning a free employee.
 
-    `suggested_faq` is the FAQ the student was shown and did not find helpful,
-    if any; it is passed on to the employee. Both are e-mailed once the
-    booking commits.
-
-    Raises `BookingError`, never returns a half-booked appointment.
+    `suggested_faq` is the FAQ the student did not find helpful, if any.
+    Raises `BookingError`.
     """
     if not office.is_active:
         raise BookingError("This office is not accepting bookings.")
@@ -144,24 +118,17 @@ def book_appointment(
     if on_duty == 0:
         raise BookingError("This office is closed at that time.")
 
-    # seq2: every lost race means one more employee now busy at `slot`, so
-    # there are never more attempts than people on duty.
+    # seq2: each lost race makes one more employee busy, so at most one try each.
     lost_a_race = False
     for _attempt in range(on_duty):
         employee = _free_employee(office, slot)
         if employee is None:
             break
         try:
-            # Atomic so the IntegrityError below leaves no broken transaction
-            # behind for the next attempt, or for the caller's own queries.
             with transaction.atomic():
-                # Locks the employee, as `withdraw_shift` does, so the shift
-                # that puts them on duty cannot go between this check and the
-                # insert. `_free_employee` read the shifts without a lock.
+                # Same lock as `withdraw_shift`, then the shift is checked again.
                 EmployeeProfile.objects.select_for_update().get(pk=employee.pk)
                 if not _on_duty(office, slot).filter(pk=employee.pk).exists():
-                    # Their shift was withdrawn in the meantime; a colleague
-                    # on duty may still be free.
                     continue
                 appointment = Appointment.objects.create(
                     student=student,
@@ -172,14 +139,11 @@ def book_appointment(
                     question_lang=question_lang,
                     suggested_faq=suggested_faq,
                 )
-                # Inside the savepoint: a lost race rolls the e-mails back
-                # with the row, so nobody hears about a booking that failed.
+                # Inside the savepoint, so a lost race sends no e-mail.
                 notifications.appointment_booked(appointment)
                 return appointment
         except IntegrityError:
-            # Another request booked the same employee between the query in
-            # `_free_employee` and this insert. The partial unique index
-            # settled it; a colleague on duty may still be free.
+            # The unique index refused a double booking; try a colleague.
             lost_a_race = True
 
     if lost_a_race:
@@ -190,9 +154,7 @@ def book_appointment(
 def declare_shift(*, employee, weekday, start_time, end_time):
     """Record that `employee` is on duty every `weekday` from start to end.
 
-    Refused unless the shift sits on the office's slot grid — a 9:15 start at a
-    30-minute office would lose a quarter of an hour without anyone noticing —
-    and overlaps none of the employee's other shifts.
+    The shift must sit on the office's slot grid and overlap no other shift.
     """
     step = employee.office.slot_duration_minutes
     if start_time >= end_time:
@@ -203,8 +165,7 @@ def declare_shift(*, employee, weekday, start_time, end_time):
         )
 
     with transaction.atomic():
-        # Locks the employee, so two shifts declared at once cannot both pass
-        # the overlap check. A no-op on SQLite, which serialises writes anyway.
+        # So two shifts declared at once cannot both pass the overlap check.
         EmployeeProfile.objects.select_for_update().get(pk=employee.pk)
         overlapping = employee.shifts.filter(
             weekday=weekday, start_time__lt=end_time, end_time__gt=start_time
@@ -220,15 +181,9 @@ def declare_shift(*, employee, weekday, start_time, end_time):
 
 
 def withdraw_shift(shift):
-    """Delete `shift`, unless booked appointments still fall inside it.
+    """Delete `shift`, unless the employee's future bookings still fall inside it.
 
-    Only the employee's own future appointments count: a colleague's are
-    covered by the colleague's shifts, and a past one no longer needs anyone
-    on duty. Refusing, rather than cancelling them, keeps the choice with a
-    person: the employee cancels them first, and each student is told.
-
-    The employee is locked, as `book_appointment` does before inserting, so a
-    booking cannot slip into the shift between the check and the delete.
+    Locks the employee like `book_appointment`, so no booking slips in meanwhile.
     """
     with transaction.atomic():
         EmployeeProfile.objects.select_for_update().get(pk=shift.employee_id)
@@ -249,14 +204,9 @@ def withdraw_shift(shift):
 
 
 def cancel_appointment(appointment, *, by):
-    """Cancel a booked appointment, freeing its slot for someone else.
+    """Cancel a booked appointment; the other party is e-mailed (FR15).
 
-    `by` is the user cancelling: whoever else is involved is e-mailed once the
-    cancellation commits (FR15).
-
-    The appointment is locked and its status read again before the checks, so
-    two cancellations at once — a double click — cannot both pass them and
-    both send the e-mails.
+    `by` is the user cancelling. The row is locked so a double click cancels once.
     """
     with transaction.atomic():
         appointment.status = (
@@ -279,17 +229,7 @@ def cancel_appointment(appointment, *, by):
 
 
 def complete_appointment(appointment):
-    """Record that a booked meeting has taken place.
-
-    Refused before the slot begins: "completed" means the employee answered
-    the student, and nobody can answer a question at a meeting that has not
-    started. It is the mirror of the rule in `cancel_appointment`, which
-    refuses to call off a meeting already under way.
-
-    Completing does not free the slot for anyone else — the constraint is
-    conditional on BOOKED, so the row stops reserving the employee, but the
-    slot is in the past by then and `available_slots` no longer offers it.
-    """
+    """Record that a booked meeting has taken place, once its slot has started."""
     if appointment.status != AppointmentStatus.BOOKED:
         raise BookingError("Only a booked appointment can be completed.")
     if appointment.slot > timezone.now():
@@ -302,18 +242,10 @@ def complete_appointment(appointment):
 
 
 def _free_employee(office, slot):
-    """The least busy employee on duty at `slot` with nothing booked there.
+    """The free employee on duty at `slot` with the fewest BOOKED appointments.
 
-    Load is counted over every appointment still BOOKED, not just this day's:
-    what the helpdesk shares out is the work waiting to be done, and an
-    appointment cancelled or completed is no longer work.
-
-    Ties break on primary key, so the choice stays deterministic — the tests
-    can name who gets a booking, and two identical situations never resolve
-    differently. Under simultaneous requests the balance is best-effort, as
-    the counts are read before the insert; what is guaranteed is only that
-    nobody is double-booked, which is the database's job (see `Meta.constraints`
-    on `Appointment`).
+    Ties break on primary key. Under concurrent requests the balance is
+    best effort; double bookings are prevented by `Appointment.Meta.constraints`.
     """
     busy = Appointment.objects.filter(
         slot=slot, status=AppointmentStatus.BOOKED, employee__office=office

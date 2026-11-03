@@ -1,11 +1,6 @@
-"""Keeping the vector store in step with the FAQs (see `faq.vector_index`).
+"""Update the vector store after a FAQ is saved or deleted.
 
-Every save and delete of a FAQ updates its entries after the transaction
-commits, so a rolled-back change never reaches Chroma. The update is
-best-effort, like the booking e-mails: a vector store that is down must not
-stop anyone from editing a FAQ. The error is logged, and `rebuild_faq_index`
-catches up afterwards. Bulk `QuerySet.update` sends no signal at all, which is
-the other reason that command exists.
+Errors are logged; `rebuild_faq_index` catches up, also after bulk updates.
 """
 
 import logging
@@ -32,8 +27,7 @@ def sync_after_commit(faq_id):
 
 @receiver(post_save, sender=Faq)
 def faq_saved(sender, instance, raw=False, **kwargs):
-    # raw: a fixture being loaded by loaddata, stored as it is in the file;
-    # rebuild_faq_index indexes it afterwards.
+    # Skipped for fixtures (loaddata).
     if not raw:
         sync_after_commit(instance.pk)
 

@@ -1,13 +1,7 @@
 """Tests for the e-mails a booking and a cancellation send (FR13-FR15).
 
-The acceptance criterion is that each transition sends exactly one e-mail to
-each person who has to hear about it, with enough context — office, date and
-time, question — to act on it without opening the app.
-
-E-mails go out on commit. Tests run inside a transaction that is never
-committed, so `django_capture_on_commit_callbacks` stands in for the commit:
-without it nothing would ever reach `mailoutbox`, and every "no e-mail" test
-would pass for the wrong reason.
+E-mails go out on commit, so `django_capture_on_commit_callbacks` stands
+in for it.
 """
 
 import logging
@@ -188,8 +182,7 @@ def test_text_is_not_html_escaped(
 def test_nothing_is_sent_for_a_booking_that_is_rolled_back(
     office, employee, student, day, django_capture_on_commit_callbacks
 ):
-    """A booking undone by an enclosing transaction never happened, so nobody
-    may be told about it."""
+    """A booking rolled back by an enclosing transaction sends nothing."""
     with (
         django_capture_on_commit_callbacks() as callbacks,
         pytest.raises(RuntimeError),
@@ -236,8 +229,7 @@ def test_one_failed_email_does_not_stop_the_other(
     mailoutbox,
     django_capture_on_commit_callbacks,
 ):
-    """The employee still hears about the booking if the student's address
-    bounces, and the other way round."""
+    """One bounced address does not stop the other e-mail."""
     real_send_mail = notifications.send_mail
 
     def refuse_the_student(*args, recipient_list, **kwargs):
@@ -328,8 +320,7 @@ def test_completing_sends_nothing(
     office, employee, student, day, mailoutbox, django_capture_on_commit_callbacks
 ):
     appointment = book(student, office, day)
-    # Rewound through a queryset, as the appointment API tests do: a meeting
-    # has to be over before it can be completed.
+    # A meeting has to be over before it can be completed.
     Appointment.objects.filter(pk=appointment.pk).update(
         slot=appointment.slot - timedelta(days=14)
     )

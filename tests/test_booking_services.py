@@ -1,12 +1,4 @@
-"""Tests for the booking rules in `booking.services`.
-
-These are the domain tests: no HTTP, no serializers. They pin down when a slot
-is free, who a booking is assigned to, and which bookings are refused.
-
-Dates are built relative to today, never hard-coded, so the suite does not rot:
-the shared `day` fixture always lands on a weekday in the future, which is what
-every "can be booked" case needs.
-"""
+"""Domain tests for `booking.services`: no HTTP, dates relative to today."""
 
 from datetime import timedelta
 from zoneinfo import ZoneInfo
@@ -54,14 +46,7 @@ def test_available_slots_spans_the_employee_shift(office, employee, day):
 
 @pytest.mark.django_db
 def test_available_slots_are_expressed_in_italian_local_time(office, employee, day):
-    """The timetable is the helpdesk's, not the server's.
-
-    Every other test here compares slots to `slot_at`, which builds them in
-    whatever timezone is active, so the whole suite would keep passing if
-    TIME_ZONE went back to UTC — and students would be offered 11:00-19:00.
-    This one reads the instant against Europe/Rome explicitly, so that change
-    fails here instead of in production.
-    """
+    """Slots are in Europe/Rome, not UTC."""
     slots = available_slots(office, day)
 
     assert slots[0].astimezone(ZoneInfo("Europe/Rome")).hour == 9
@@ -145,7 +130,6 @@ def test_book_appointment_assigns_an_employee_of_that_office(
 ):
     appointment = book(student, office, slot_at(day, 9))
 
-    # The invariant the schema cannot express: see booking/models.py.
     assert appointment.employee == employee
     assert appointment.employee.office == appointment.office
 
@@ -180,12 +164,7 @@ def test_two_bookings_at_the_same_slot_get_different_employees(
 def test_consecutive_bookings_are_spread_evenly_across_the_office(
     office, employee, student, day
 ):
-    """FR10: nobody carries two more appointments than a colleague.
-
-    Each booking is on a different slot, so nothing but the load counter
-    decides who gets it: with the previous `order_by("pk")` every one of these
-    would have landed on the same employee.
-    """
+    """FR10: each booking goes to the least busy employee."""
     make_employee(office, "luca.verdi@unibo.it")
     make_employee(office, "sofia.conti@unibo.it")
 
@@ -204,14 +183,9 @@ def test_consecutive_bookings_are_spread_evenly_across_the_office(
 
 
 def lose_the_first_pick_to(rival, monkeypatch):
-    """Make the first employee `book_appointment` picks get taken under it.
+    """Make a rival take the first employee `book_appointment` picks.
 
-    `book_appointment` reads who is free and then inserts, and nothing stops
-    another request from slipping between the two. Rather than hope two real
-    threads interleave that way — which would make the suite flaky and prove
-    nothing on the runs where they do not — the rival booking is inserted from
-    inside `_free_employee`, which is exactly that window. Only the first pick
-    is stolen: a real rival books once.
+    The rival is inserted from inside `_free_employee`, the race window.
     """
     choose = services._free_employee
     stolen = []
@@ -239,8 +213,7 @@ def lose_the_first_pick_to(rival, monkeypatch):
 def test_a_booking_lost_in_the_race_goes_to_a_free_colleague(
     office, employee, student, day, monkeypatch
 ):
-    """seq2: losing an employee to a rival is not losing the slot while a
-    colleague on duty is still free — the service tries the next one."""
+    """seq2: after losing an employee to a rival, the next free one is tried."""
     colleague = make_employee(office, "luca.verdi@unibo.it")
     rival = make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT)
     slot = slot_at(day, 10)
@@ -257,8 +230,7 @@ def test_a_booking_lost_in_the_race_goes_to_a_free_colleague(
 def test_book_appointment_reports_a_slot_lost_in_the_race(
     office, employee, student, day, monkeypatch
 ):
-    """FR9/NFR1: once nobody is left, the loser is told to pick again, not
-    given a 500."""
+    """FR9/NFR1: with nobody left the loser gets a 400, not a 500."""
     rival = make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT)
     slot = slot_at(day, 10)
     lose_the_first_pick_to(rival, monkeypatch)
@@ -266,9 +238,7 @@ def test_book_appointment_reports_a_slot_lost_in_the_race(
     with pytest.raises(BookingError):
         book(student, office, slot)
 
-    # One booking, not two — and the query itself is the second assertion: the
-    # atomic block rolled back to its savepoint, so the connection is still
-    # usable after the IntegrityError instead of demanding a rollback first.
+    # One booking, and the connection is still usable after the IntegrityError.
     assert Appointment.objects.filter(slot=slot).count() == 1
     assert Appointment.objects.filter(student=student).count() == 0
 
@@ -360,7 +330,7 @@ def test_cancel_appointment_rejects_an_already_cancelled_one(
 
 @pytest.mark.django_db
 def test_cancel_appointment_rejects_a_past_appointment(office, employee, student, day):
-    # Created straight through the ORM: the service would refuse to book it.
+    # Through the ORM: the service would refuse it.
     appointment = Appointment.objects.create(
         student=student,
         office=office,
@@ -378,12 +348,7 @@ def test_cancel_appointment_rejects_a_past_appointment(office, employee, student
 
 
 def past_appointment(student, office, employee, day, status=AppointmentStatus.BOOKED):
-    """A meeting that already happened, built straight through the ORM.
-
-    The service refuses to book a slot in the past, which is the whole point
-    of these tests: the only way to have an appointment worth completing is
-    to let time pass, or to write the row directly.
-    """
+    """A meeting that already happened, written straight through the ORM."""
     return Appointment.objects.create(
         student=student,
         office=office,

@@ -1,10 +1,4 @@
-"""Tests for the questions endpoints (FR6, FR7; US2a-US2c).
-
-A student asks a question about an office, gets back the best-matching FAQ, if
-any, and says whether it answered them. Asking runs the full-text search, so
-the tests that reach it are marked `postgres`; the ones that stop at
-validation, and all of resolving, run on SQLite too.
-"""
+"""Tests for the questions endpoints (FR6, FR7; US2a-US2c). Asking needs PostgreSQL."""
 
 import uuid
 
@@ -200,8 +194,7 @@ def test_asking_about_an_unknown_office_is_refused(student_client):
 
 @pytest.mark.django_db
 def test_asking_about_an_office_missing_from_the_database_is_refused(student_client):
-    # A valid code, but no office to file the question under: refused the way
-    # an unknown code is, rather than failing further down.
+    # A valid code without an office in the database is refused too.
     response = ask(student_client, OfficeCode.INTERNSHIPS, "tirocinio")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST

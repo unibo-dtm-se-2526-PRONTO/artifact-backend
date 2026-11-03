@@ -1,5 +1,4 @@
-# The Vue frontend (../artifact-frontend), served by the Vite dev server. It is
-# built from the frontend folder by docker compose: see the frontend service.
+# The Vue frontend on the Vite dev server, built by docker compose.
 FROM node:24-alpine
 
 WORKDIR /app
@@ -11,6 +10,5 @@ COPY . .
 
 EXPOSE 5173
 
-# --host: listen on every interface, or the port published by the container
-# would not reach the server.
+# --host: listen on every interface.
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

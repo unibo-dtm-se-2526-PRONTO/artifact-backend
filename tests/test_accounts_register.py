@@ -15,8 +15,7 @@ User = get_user_model()
 URL = "/api/auth/register/"
 LOGIN_URL = "/api/auth/login/"
 
-# Complete, valid sign-ups; a test that needs a variation spreads one and
-# overrides a key, so what it is about stands out.
+# Valid sign-ups; tests override one key at a time.
 STUDENT = {
     "email": "mario.rossi@studio.unibo.it",
     "password": PASSWORD,
@@ -348,8 +347,7 @@ def test_a_matricola_already_registered_is_rejected(client):
     [("matricola", "0001012345"), ("degree_programme", "Ingegneria")],
 )
 def test_an_employee_giving_student_data_is_rejected(client, field, value):
-    # Refused rather than dropped: an employee sending a matricola has most
-    # likely typed the wrong address, and silently ignoring it would hide that.
+    # Refused rather than dropped: it probably means a wrong address.
     response = client.post(URL, {**EMPLOYEE, field: value}, format="json")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -365,17 +363,13 @@ def test_an_employee_is_registered_without_student_data(client):
 
     assert response.status_code == status.HTTP_201_CREATED
     assert response.json()["matricola"] == response.json()["degree_programme"] == ""
-    # Not even an empty one: nobody but a student has a student profile.
     assert User.objects.exists()
     assert not StudentProfile.objects.exists()
 
 
 @pytest.mark.django_db
 def test_a_student_whose_profile_cannot_be_saved_is_not_registered(client, monkeypatch):
-    # Two sign-ups with the same matricola at once: both pass the uniqueness
-    # check, and the second insert of the profile fails. Simulated by turning
-    # the check off. The user created just before must go with it, or a
-    # student without a profile would be left behind.
+    # Simulates two simultaneous sign-ups with the same matricola: no user may be left without a profile.
     make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT, matricola="0001012345")
     monkeypatch.setattr(UniqueValidator, "__call__", lambda *args: None)
 
@@ -395,8 +389,6 @@ def test_the_password_is_stored_hashed(client):
 
     stored = User.objects.get().password
     assert PASSWORD not in stored
-    # A salted hash in the format of the configured hasher, not the password
-    # under another name.
     assert identify_hasher(stored).algorithm == get_hasher().algorithm
     assert User.objects.get().check_password(PASSWORD)
 
@@ -413,9 +405,7 @@ def test_the_password_is_stored_hashed(client):
     ids=["minimum-length", "common", "numeric", "similar-to-a-name"],
 )
 def test_every_configured_password_validator_is_enforced(client, password, reason):
-    # One case per validator in AUTH_PASSWORD_VALIDATORS. The last one only
-    # works because the password is checked against the whole candidate user,
-    # names included.
+    # One case per validator in AUTH_PASSWORD_VALIDATORS.
     response = client.post(URL, {**STUDENT, "password": password}, format="json")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST

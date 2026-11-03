@@ -10,12 +10,7 @@ from .models import StudentProfile, User
 
 
 class UserCreationFormWithoutUsername(AdminUserCreationForm):
-    """Django's own admin creation form, retargeted at email as the credential.
-
-    The admin one, not ``UserCreationForm``: only it declares the
-    ``usable_password`` field that ``add_fieldsets`` lists, and with the plain
-    form the add page fails with a ``FieldError`` before it renders.
-    """
+    """Django's admin creation form, with email as the credential."""
 
     class Meta(AdminUserCreationForm.Meta):
         model = User
@@ -28,12 +23,7 @@ class UserCreationFormWithoutUsername(AdminUserCreationForm):
 
 
 class StudentProfileFormSet(BaseInlineFormSet):
-    """Asks a student for their profile, and refuses one to anybody else.
-
-    Checked here rather than left to `StudentProfile.clean()`: the inline's
-    profile only gets its user when saved, so its own check cannot see the
-    role. This one reads it from the user as edited on the same page.
-    """
+    """Requires a profile for a student and refuses one to anybody else."""
 
     def clean(self):
         super().clean()
@@ -49,18 +39,12 @@ class StudentProfileFormSet(BaseInlineFormSet):
 
 
 class StudentProfileInline(admin.StackedInline):
-    """The student data, edited on the user's own page.
-
-    One at most: Django caps the inline at one form, the relation being
-    one-to-one.
-    """
+    """The student data, edited on the user's page."""
 
     model = StudentProfile
     formset = StudentProfileFormSet
 
     def get_extra(self, request, obj=None, **kwargs):
-        # No empty profile form on the page of an employee or an admin; one
-        # can still be added, and is then refused unless the role changes too.
         if obj is not None and obj.role != Role.STUDENT:
             return 0
         return 1
@@ -68,9 +52,7 @@ class StudentProfileInline(admin.StackedInline):
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
-    """Subclassed rather than reused as is: every fieldset and every list in
-    Django's UserAdmin names ``username``, a field this model does not have.
-    """
+    """Django's UserAdmin without ``username``."""
 
     add_form = UserCreationFormWithoutUsername
     inlines = [StudentProfileInline]

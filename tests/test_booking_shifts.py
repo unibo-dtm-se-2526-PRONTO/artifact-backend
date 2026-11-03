@@ -1,11 +1,4 @@
-"""Tests for shifts: how they are declared, withdrawn, and turned into slots.
-
-These are domain tests, like `test_booking_services.py`: no HTTP. They pin
-down FR4 (availability is derived from shifts, not stored) and FR5 (a shift
-can be added or removed afterwards, and the change shows up at once), plus the
-two rules that keep that safe — shifts sit on the office's slot grid, and a
-shift cannot be withdrawn from under a booked appointment.
-"""
+"""Domain tests for shifts (FR4, FR5): declaring, withdrawing, deriving slots."""
 
 from datetime import time, timedelta
 
@@ -105,8 +98,7 @@ def test_declare_shift_rejects_an_empty_shift(newcomer):
     ids=["start", "end"],
 )
 def test_declare_shift_rejects_times_off_the_slot_grid(newcomer, start, end):
-    """A 9:15 start at a 30-minute office would silently lose a quarter of an
-    hour: the slots are 9:00 and 9:30, and 9:15-9:30 fits neither."""
+    """9:15 does not fit a grid of 30-minute slots."""
     with pytest.raises(BookingError):
         declare_shift(employee=newcomer, weekday=MONDAY, start_time=start, end_time=end)
 
@@ -161,8 +153,7 @@ def test_declare_shift_accepts_back_to_back_shifts(newcomer):
 
 @pytest.mark.django_db
 def test_declare_shift_ignores_colleagues_shifts(office, employee):
-    """Overlap is a rule about one person's week: colleagues on duty at the
-    same time is exactly how an office covers a slot twice."""
+    """Overlap is checked per employee: colleagues may share hours."""
     colleague = make_employee(office, "luca.verdi@unibo.it", shifts=[])
 
     declare_shift(
@@ -177,8 +168,7 @@ def test_declare_shift_ignores_colleagues_shifts(office, employee):
 
 @pytest.mark.django_db
 def test_availability_covers_exactly_a_declared_shift(office, newcomer, day):
-    """FR4's acceptance criterion: Monday 9:00-12:00 with 30-minute slots
-    yields contiguous slots covering the whole shift, and nothing else."""
+    """FR4: Monday 9:00-12:00 with 30-minute slots gives exactly those slots."""
     declare_shift(
         employee=newcomer, weekday=MONDAY, start_time=time(9), end_time=time(12)
     )
@@ -224,7 +214,7 @@ def test_availability_is_empty_on_a_day_nobody_works(office, newcomer, day):
 
 @pytest.mark.django_db
 def test_a_new_shift_shows_up_at_once(office, newcomer, day):
-    """FR5: slots are derived, not stored, so there is nothing to refresh."""
+    """FR5: slots are derived, so a new shift shows up at once."""
     assert available_slots(office, day) == []
 
     declare_shift(
@@ -247,8 +237,7 @@ def test_a_withdrawn_shift_disappears_at_once(office, newcomer, day):
 
 @pytest.mark.django_db
 def test_availability_keeps_only_slots_a_shift_covers_whole(office, day):
-    """A shift declared at 30-minute slots stays put if the office moves to
-    60: it offers the hours it fully covers and nothing past its end."""
+    """After the office moves to 60-minute slots, a shift offers the hours it covers."""
     make_employee(office, "a@unibo.it", shifts=[(MONDAY, time(9, 30), time(12))])
     office.slot_duration_minutes = 60
     office.save()
@@ -275,8 +264,7 @@ def test_a_slot_stays_available_while_someone_on_duty_is_free(office, student, d
 
 @pytest.mark.django_db
 def test_a_booking_goes_to_someone_on_duty(office, student, day):
-    """The least busy employee is only a candidate while on duty: here the
-    idle one is off at 10, so the one already carrying work takes it."""
+    """The least busy employee is skipped while off duty."""
     busy = make_employee(office, "a@unibo.it", shifts=[(MONDAY, time(9), time(11))])
     make_employee(office, "b@unibo.it", shifts=[(MONDAY, time(14), time(17))])
     book(student, office, slot_at(day, 9))
@@ -300,8 +288,7 @@ def test_book_appointment_rejects_a_slot_nobody_covers(office, newcomer, student
 def test_book_appointment_rejects_a_slot_running_past_the_shift(
     office, newcomer, student, day
 ):
-    """11:30 is on the grid, but a 60-minute meeting there would end at 12:30,
-    after the shift."""
+    """A 60-minute meeting at 11:30 would end after the shift."""
     declare_shift(
         employee=newcomer, weekday=MONDAY, start_time=time(9), end_time=time(12)
     )
@@ -400,7 +387,7 @@ def test_withdraw_shift_ignores_past_appointments(office, employee, student, day
 def test_withdraw_shift_ignores_colleagues_appointments(office, employee, day):
     colleague = make_employee(office, "luca.verdi@unibo.it")
     student = make_user("lucia.neri@studio.unibo.it", User.Role.STUDENT)
-    # The least busy employee breaks ties on pk, so this one goes to `employee`.
+    # Ties break on pk, so this one goes to `employee`.
     book(student, office, slot_at(day, 10))
 
     withdraw_shift(colleague.shifts.get(weekday=MONDAY))

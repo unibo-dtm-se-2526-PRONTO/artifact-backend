@@ -1,11 +1,7 @@
 name: dependabot-automerge
-# Merges Dependabot's patch and minor updates into develop once the CI/CD run
-# of the pull request is green. Majors wait for a person.
-#
-# It merges itself instead of turning on GitHub's auto-merge: a merge made with
-# the GITHUB_TOKEN pushes to develop without starting any workflow, so CI/CD
-# (and migrate-neon) would never run on the merged commit. A workflow_dispatch
-# is the one event that token may start, so the merge is followed by one.
+# Merges Dependabot's patch and minor updates once CI/CD is green; majors wait
+# for a person. A merge made with the GITHUB_TOKEN starts no workflow, so CI/CD
+# is then started on develop with a workflow_dispatch.
 on:
   pull_request:
 permissions:
@@ -16,7 +12,6 @@ jobs:
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # A rebase of the pull request starts a new run, which replaces this one.
     concurrency:
       group: automerge-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -34,9 +29,7 @@ jobs:
         id: metadata
         uses: dependabot/fetch-metadata@v3
 
-      # The CI/CD run started by the same push. The required checks alone are
-      # not enough to wait on: Test on PostgreSQL only shows up once the
-      # preliminary checks are over.
+      # The whole run: Test on PostgreSQL appears only after the first job.
       - name: Wait for CI/CD
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
         run: |
@@ -55,10 +48,9 @@ jobs:
         run: |
           if gh pr merge --merge "$PR_URL"; then exit 0; fi
           case "$(gh pr view "$PR_URL" --json state,mergeStateStatus --jq '.state + " " + .mergeStateStatus')" in
-            # merged meanwhile, by an auto-merge turned on before this workflow
+            # already merged by GitHub's auto-merge
             MERGED*) exit 0 ;;
-            # Behind develop, after another update merged first: Dependabot
-            # rebases it, and the rebase starts this workflow again.
+            # behind develop: the rebase starts this workflow again
             *BEHIND) gh pr comment "$PR_URL" --body "@dependabot rebase" ;;
             *) exit 1 ;;
           esac

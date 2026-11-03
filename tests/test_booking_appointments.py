@@ -1,9 +1,4 @@
-"""Tests for the appointment endpoints.
-
-The booking rules themselves live in `test_booking_services.py`; what is
-checked here is the HTTP contract on top of them — who may call what, what
-comes back, and which errors reach the client.
-"""
+"""Tests for the appointment endpoints; the rules are in `test_booking_services.py`."""
 
 from datetime import timedelta
 
@@ -28,11 +23,7 @@ def complete_url(appointment_id):
 
 
 def move_to_the_past(appointment):
-    """Rewind a booked appointment so it can be completed.
-
-    Updated through a queryset rather than `save()`, so nothing recomputes
-    `updated_at` behind the test's back: only the slot moves.
-    """
+    """Move a booked appointment a week back, so it can be completed."""
     Appointment.objects.filter(pk=appointment.pk).update(
         slot=appointment.slot - timedelta(days=14)
     )
@@ -103,7 +94,6 @@ def test_the_client_cannot_choose_the_employee(student_client, office, employee,
 
     response = student_client.post(APPOINTMENTS_URL, payload, format="json")
 
-    # Assigned by the service, from the office's own staff, not by the caller.
     assert response.json()["employee"] == employee.user.email
 
 
@@ -278,7 +268,6 @@ def test_the_assigned_employee_can_complete_an_appointment(
 
 @pytest.mark.django_db
 def test_a_student_cannot_complete_their_own_appointment(student_client, appointment):
-    """The student is the one asking the question, not the one answering it."""
     move_to_the_past(appointment)
 
     response = student_client.post(complete_url(appointment.id))
@@ -290,7 +279,7 @@ def test_a_student_cannot_complete_their_own_appointment(student_client, appoint
 
 @pytest.mark.django_db
 def test_completing_a_colleagues_appointment_is_not_found(office, appointment):
-    """404 rather than 403, as everywhere else: it is not their appointment."""
+    """404 rather than 403: it is not their appointment."""
     colleague = make_employee(office, "luca.verdi@unibo.it")
     move_to_the_past(appointment)
 
@@ -316,7 +305,6 @@ def test_completing_an_appointment_that_has_not_started_is_rejected(
 def test_a_completed_appointment_still_belongs_to_the_student(
     student_client, employee_client, appointment
 ):
-    """Completing is not deleting: the student keeps the record of the meeting."""
     move_to_the_past(appointment)
     employee_client.post(complete_url(appointment.id))
 
@@ -377,8 +365,7 @@ def test_an_unknown_faq_is_a_field_error(student_client, office, employee, day):
 def test_an_unpublished_faq_is_a_field_error(
     student_client, office, employee, day, faq
 ):
-    """A FAQ the student could not have been shown cannot be the one that
-    failed them."""
+    """Only a published FAQ can be the suggested one."""
     faq.is_active = False
     faq.save()
     payload = booking_payload(office, slot_at(day, 9)) | {"faq_id": faq.id}

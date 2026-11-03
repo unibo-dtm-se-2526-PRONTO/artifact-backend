@@ -116,11 +116,14 @@ jobs:
 
   # Brings the shared Neon database to the schema of develop as soon as a change
   # lands there, so nobody has to remember to run `migrate` by hand. Only on a
-  # push to develop — a merged pull request — and only once both test runs are
+  # push to develop — a merged pull request — or on a run started by hand or by
+  # dependabot-automerge after its merge, and only once both test runs are
   # green: a branch or a red build never touches the database the team shares.
   migrate-neon:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     name: Migrate the Neon database
     # The credentials live in this environment's secrets. Required reviewers can

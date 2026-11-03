@@ -1,8 +1,11 @@
 name: dependabot-automerge
-# Turns on auto-merge for Dependabot's patch and minor updates: GitHub merges
-# them into develop once the checks the branch protection of develop requires
-# are green. Majors wait for a person. Without required checks GitHub would
-# merge at once, untested, so they are a precondition of this workflow.
+# Merges Dependabot's patch and minor updates into develop once the CI/CD run
+# of the pull request is green. Majors wait for a person.
+#
+# It merges itself instead of turning on GitHub's auto-merge: a merge made with
+# the GITHUB_TOKEN pushes to develop without starting any workflow, so CI/CD
+# (and migrate-neon) would never run on the merged commit. A workflow_dispatch
+# is the one event that token may start, so the merge is followed by one.
 on:
   pull_request:
 permissions:
@@ -12,18 +15,56 @@ jobs:
     name: Auto-merge Dependabot
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # A rebase of the pull request starts a new run, which replaces this one.
+    concurrency:
+      group: automerge-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: write
       pull-requests: write
+      actions: write
+    env:
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Read the Update
         id: metadata
         uses: dependabot/fetch-metadata@v3
 
-      - name: Enable Auto-merge
+      # The CI/CD run started by the same push. The required checks alone are
+      # not enough to wait on: Test on PostgreSQL only shows up once the
+      # preliminary checks are over.
+      - name: Wait for CI/CD
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
-        # a merge commit, like the other pull requests into develop
-        run: gh pr merge --auto --merge "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 20); do
+            run_id=$(gh run list --workflow check.yml --commit "$HEAD_SHA" \
+              --event pull_request --json databaseId --jq '.[0].databaseId')
+            [ -n "$run_id" ] && break
+            sleep 15
+          done
+          [ -n "$run_id" ] || { echo "No CI/CD run for $HEAD_SHA"; exit 1; }
+          gh run watch "$run_id" --exit-status --interval 30
+
+      # a merge commit, like the other pull requests into develop
+      - name: Merge
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: |
+          if gh pr merge --merge "$PR_URL"; then exit 0; fi
+          case "$(gh pr view "$PR_URL" --json state,mergeStateStatus --jq '.state + " " + .mergeStateStatus')" in
+            # merged meanwhile, by an auto-merge turned on before this workflow
+            MERGED*) exit 0 ;;
+            # Behind develop, after another update merged first: Dependabot
+            # rebases it, and the rebase starts this workflow again.
+            *BEHIND) gh pr comment "$PR_URL" --body "@dependabot rebase" ;;
+            *) exit 1 ;;
+          esac
+
+      - name: Run CI/CD on develop
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: |
+          [ "$(gh pr view "$PR_URL" --json state --jq .state)" = MERGED ] || exit 0
+          gh workflow run check.yml --ref develop

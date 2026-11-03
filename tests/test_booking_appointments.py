@@ -34,7 +34,7 @@ def move_to_the_past(appointment):
     `updated_at` behind the test's back: only the slot moves.
     """
     Appointment.objects.filter(pk=appointment.pk).update(
-        slot=appointment.slot - timedelta(days=7)
+        slot=appointment.slot - timedelta(days=14)
     )
     appointment.refresh_from_db()
     return appointment

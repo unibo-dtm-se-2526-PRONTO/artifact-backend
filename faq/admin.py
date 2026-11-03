@@ -21,12 +21,7 @@ class FaqAdmin(admin.ModelAdmin):
 
 @admin.register(Inquiry)
 class InquiryAdmin(admin.ModelAdmin):
-    """What students asked, to see where the knowledge base falls short.
-
-    Read-only: an inquiry is a record of what happened, written by the API.
-    Deleting stays possible, to drop a question that should not have been
-    stored (a student writing their own personal data into it, say).
-    """
+    """Students' questions, read-only; deleting is allowed."""
 
     list_display = [
         "created_at",
@@ -38,8 +33,6 @@ class InquiryAdmin(admin.ModelAdmin):
         "resolved",
     ]
     list_filter = ["office", "language", "matched_by", "resolved"]
-    # The office and the FAQ are both shown, and a FAQ is shown with its own
-    # office's code: one join for all of them instead of a query per row.
     list_select_related = ["office", "matched_faq__office"]
     search_fields = ["text", "office__code", "office__name_it"]
     date_hierarchy = "created_at"

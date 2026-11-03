@@ -14,18 +14,10 @@ from .services import InquiryError, ask_question, resolve_inquiry
 
 
 class PublishedFaqMixin(LanguageAwareMixin):
-    """What both FAQ views share: the published rows, readable by anyone.
-
-    Public on purpose, unlike the rest of the API: these answers exist to spare
-    a phone call, and a student should not need an account to read them.
-    Inactive rows are filtered out here rather than in the views, so an
-    archived FAQ is a 404 on the detail endpoint and not merely hidden from
-    the list.
-    """
+    """Published FAQs, readable without an account."""
 
     serializer_class = FaqSerializer
     permission_classes = [AllowAny]
-    # Each FAQ is answered with its office's code: one join, not a query per row.
     queryset = Faq.objects.filter(is_active=True).select_related("office")
 
 
@@ -51,14 +43,9 @@ class FaqDetailView(PublishedFaqMixin, generics.RetrieveAPIView):
 
 
 class QuestionCreateView(APIView):
-    """Ask a question and get the best-matching FAQ (US2a, US2b).
+    """Ask a question and get the best-matching FAQ (US2a, US2b). Students only.
 
-    The office is optional: without one, the FAQs of every office are searched.
-
-    Students only, unlike reading the FAQs: a question is recorded, and the
-    records are there to show what students need that the FAQs do not cover.
-    The ``lang`` parameter is the language of the question, so it also picks
-    the stemming the search uses.
+    ``lang`` is the language of the question. The office is optional.
     """
 
     permission_classes = [IsAuthenticated, IsStudent]
@@ -76,11 +63,7 @@ class QuestionCreateView(APIView):
 
 
 class QuestionResolveView(APIView):
-    """Say that the suggested answer resolved the question (US2c).
-
-    Not scoped to the caller, since an inquiry records no user: the UUID the
-    student was given when asking is what lets them close it.
-    """
+    """Say that the suggested answer resolved the question (US2c), by UUID."""
 
     permission_classes = [IsAuthenticated, IsStudent]
 

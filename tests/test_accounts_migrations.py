@@ -1,8 +1,4 @@
-"""Tests for the data migrations of the accounts app.
-
-The migration's function is called on the current models rather than by
-migrating a database back and forth: what is tested is which rows it picks.
-"""
+"""Tests for the data migrations of the accounts app, run on the current models."""
 
 from importlib import import_module
 

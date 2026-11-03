@@ -124,8 +124,7 @@ def test_deactivated_user_cannot_log_in(client, user):
 
 @pytest.mark.django_db
 def test_deactivated_user_gets_the_same_error_as_a_wrong_password(client, user):
-    # Deliberate: a specific "deactivated" message would reveal that the
-    # address belongs to a registered account.
+    # A specific message would reveal that the address is registered.
     user.is_active = False
     user.save()
     deactivated = client.post(
@@ -222,8 +221,7 @@ def test_me_gives_an_employee_no_student_data(db):
 
 @pytest.mark.django_db
 def test_no_endpoint_ever_returns_the_password_or_its_hash(client):
-    # NFR3, across the whole sign-up flow: neither the password the user typed
-    # nor the hash stored in its place appears in any response body.
+    # NFR3: neither the password nor its hash appears in any response.
     register = client.post(
         "/api/auth/register/",
         {

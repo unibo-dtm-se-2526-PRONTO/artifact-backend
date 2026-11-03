@@ -1,37 +1,10 @@
-"""Seed the FAQ knowledge base from the helpdesk's spreadsheet.
+"""Import the FAQs from the helpdesk spreadsheet (.xlsx), anonymised.
 
-The sheet is the phone helpdesk's log, one question per row, with the columns
-``Ufficio | Office | Domanda | Question | Risposta | Answer`` (office,
-question and answer, each in Italian and English). ``Question`` and ``Answer``
-are optional. Columns are found by their heading, so their order does not
-matter.
-
-What happens to each row:
-
-- the office is looked up by its Italian name, then its English one; a row
-  whose office is not one of ``OfficeCode`` is skipped, as is a row without a
-  question or an answer. Skipped rows are counted by reason, never fatal
-- an office the sheet names that does not exist in the database yet is
-  created, as ``seed_offices`` would create it (``offices.seed``), so the
-  import does not depend on the offices having been seeded first. Offices
-  already there are used as they are
-- every text is anonymised (``faq.anonymisation``) before it is stored or
-  compared, so personal data never reaches the database
-- a missing English answer is replaced by the Italian one until someone
-  translates it in the admin; a missing English question falls back to the
-  Italian one the same way
-- new FAQs are created unpublished, because the anonymisation of names is a
-  heuristic and the text is about to be shown on a public endpoint: someone
-  reads them in the admin first. ``--publish`` skips that review
-
-The import is idempotent. ``(office, question_it)`` is the natural key
-(see ``Faq.Meta``), so running it again updates the FAQs it finds instead of
-duplicating them. The Italian answer always follows the sheet; so do the
-English question and answer when the sheet has them. When it does not, the
-stored English text is kept if someone translated it in the admin, and
-replaced only while it is still the copy of the Italian one. Whether a FAQ is
-published is never touched. The whole run is one transaction: a failure
-halfway stores nothing.
+Columns are found by heading: ``Ufficio | Office | Domanda | Question |
+Risposta | Answer``; ``Question`` and ``Answer`` are optional and fall back to
+the Italian text. Missing offices are created. New FAQs stay unpublished unless
+``--publish``. Idempotent on ``(office, question_it)``: a re-import keeps
+English texts translated in the admin. One transaction for the whole run.
 """
 
 from collections import Counter
@@ -49,8 +22,7 @@ from offices.models import Office
 from offices.seed import seed_office
 from pronto.enums import OfficeCode
 
-# The office names used by the helpdesk, in both languages, lower-cased. The
-# codes and labels of ``OfficeCode`` are accepted as well.
+# Lower-cased office names in both languages; codes and labels work too.
 OFFICE_NAMES = {
     "orientamento": OfficeCode.GUIDANCE,
     "guidance": OfficeCode.GUIDANCE,
@@ -159,8 +131,7 @@ def cell_text(value):
 
 
 def import_row(row, publish):
-    """Create or update the FAQ a row describes: "created", "updated" or
-    "unchanged". Raises ``SkippedRow`` when the row cannot become one."""
+    """Create or update the row's FAQ: "created", "updated" or "unchanged"."""
     if not any(row.values()):
         raise SkippedRow("empty row")
     office_code = office_of(row)
@@ -205,15 +176,12 @@ def import_row(row, publish):
 
 
 def english_text(from_sheet, stored_en, stored_it, italian):
-    """The English text a FAQ keeps on a new import: the sheet's, if it has
-    one; otherwise the Italian one, while the stored English is still the
-    untranslated copy."""
+    """The sheet's English text, else the Italian while still untranslated."""
     if from_sheet:
         return from_sheet
     if stored_en == stored_it:
         return italian
-    # An English text that differs from the Italian one was written by
-    # someone in the admin: the sheet has nothing better to replace it with.
+    # Translated in the admin: keep it.
     return stored_en
 
 

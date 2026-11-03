@@ -7,8 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# The one Poetry version of the project: CI reads it from this line, so bump
-# it here and nowhere else.
+# The project's Poetry version; CI reads it from here.
 ARG POETRY_VERSION=2.2.1
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 

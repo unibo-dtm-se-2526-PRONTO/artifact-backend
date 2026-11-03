@@ -1,8 +1,4 @@
-"""Tests for the anonymisation applied to FAQs before they are imported (NFR4).
-
-Every name, address and number below is invented. The real helpdesk data
-never appears in the tests.
-"""
+"""Tests for the anonymisation of FAQs (NFR4). All the data below is invented."""
 
 import pytest
 
@@ -24,8 +20,7 @@ def test_a_personal_email_address_is_replaced(address):
 
 
 def test_an_institutional_office_mailbox_is_kept():
-    # Students have @studio.unibo.it addresses, so an @unibo.it one belongs to
-    # the university: the office to write to, which is what the answer is for.
+    # @unibo.it addresses belong to the university, so they stay.
     text = "Scrivi a segreteria.cesena@unibo.it per il certificato."
 
     assert anonymise(text) == text

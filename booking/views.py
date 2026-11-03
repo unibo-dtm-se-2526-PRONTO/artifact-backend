@@ -35,8 +35,7 @@ from .services import (
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def health(request: Request) -> Response:
-    """Report that the service is up, and which release is running. Used by
-    monitoring and deployment checks."""
+    """Report that the service is up, and which release is running."""
     return Response(
         {"status": "ok", "version": settings.VERSION}, status=status.HTTP_200_OK
     )
@@ -53,8 +52,6 @@ class OfficeAvailabilityView(APIView):
     """The slots of one day a student can still book at one office."""
 
     def get(self, request, code):
-        # Inactive offices are hidden rather than returned empty: an office
-        # that is not taking bookings has no availability to talk about.
         office = get_object_or_404(Office, code=code, is_active=True)
 
         query = AvailabilitySerializer(data=request.query_params)
@@ -72,12 +69,7 @@ class OfficeAvailabilityView(APIView):
 
 
 class AppointmentQuerysetMixin:
-    """Scopes every appointment view to what the caller is allowed to see.
-
-    Scoping the queryset instead of checking ownership object by object means
-    someone else's appointment answers 404: whether it exists at all is not
-    the caller's business.
-    """
+    """Limits appointments to the caller's, so anyone else's answers 404."""
 
     def get_queryset(self):
         appointments = Appointment.objects.select_related(
@@ -108,9 +100,7 @@ class AppointmentListCreateView(AppointmentQuerysetMixin, generics.ListCreateAPI
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         appointment = serializer.save()
-        # Answered with the read serializer: the caller needs the id and the
-        # employee the service assigned, neither of which the write serializer
-        # carries.
+        # The read serializer includes the id and the assigned employee.
         return Response(
             AppointmentSerializer(appointment).data, status=status.HTTP_201_CREATED
         )
@@ -144,12 +134,7 @@ class AppointmentCompleteView(AppointmentQuerysetMixin, generics.GenericAPIView)
 
 
 class EmployeeProfileView(APIView):
-    """The office the calling employee works for.
-
-    Chosen once: changing office would leave the appointments already booked
-    with the old one assigned to someone who no longer works there, so after
-    the first choice only an admin can move an employee.
-    """
+    """The calling employee's office, chosen once; then only an admin changes it."""
 
     permission_classes = [IsAuthenticated, IsEmployee]
 
@@ -172,16 +157,11 @@ class EmployeeProfileView(APIView):
 
 
 class ShiftListCreateView(APIView):
-    """The calling employee's weekly shifts, or a new one.
-
-    There is no update: replacing a shift is withdrawing it and declaring
-    another, so the rules on both sides apply to every change.
-    """
+    """The calling employee's weekly shifts, or a new one. No update."""
 
     permission_classes = [IsAuthenticated, IsEmployee]
 
     def get(self, request):
-        # No profile yet means no shifts yet, not an error.
         shifts = Shift.objects.filter(employee__user=request.user)
         return Response(ShiftSerializer(shifts, many=True).data)
 
@@ -207,8 +187,6 @@ class ShiftDetailView(APIView):
     permission_classes = [IsAuthenticated, IsEmployee]
 
     def delete(self, request, pk):
-        # Scoped to the caller: someone else's shift answers 404, as
-        # someone else's appointment does.
         shift = get_object_or_404(Shift, pk=pk, employee__user=request.user)
         try:
             withdraw_shift(shift)

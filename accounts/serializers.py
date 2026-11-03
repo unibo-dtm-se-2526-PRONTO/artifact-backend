@@ -9,8 +9,7 @@ from .models import MATRICOLA_TAKEN, StudentProfile, matricola_validator
 
 User = get_user_model()
 
-# Sent and returned alongside the user's own fields, but stored in the
-# student's `StudentProfile`.
+# Stored in the student's `StudentProfile`.
 STUDENT_FIELDS = ("matricola", "degree_programme")
 
 # Institutional email domains, and the role each one grants.
@@ -21,12 +20,7 @@ ROLE_BY_EMAIL_DOMAIN = {
 
 
 class LowercaseEmailField(serializers.EmailField):
-    """An email field that lowercases before anything else looks at the value.
-
-    Lowercasing in ``validate_email`` would come too late: DRF runs the field
-    validators, uniqueness included, first, so the same address in a different
-    case would slip past the unique constraint.
-    """
+    """Lowercases the email before the uniqueness validator runs."""
 
     def to_internal_value(self, data):
         return super().to_internal_value(data).lower()
@@ -35,17 +29,11 @@ class LowercaseEmailField(serializers.EmailField):
 class RegisterSerializer(serializers.ModelSerializer):
     """Creates a user whose role is derived from the email domain."""
 
-    # Declared explicitly, so the uniqueness check ModelSerializer would have
-    # added on its own has to be spelled out here too.
     email = LowercaseEmailField(
         validators=[UniqueValidator(queryset=User.objects.all())]
     )
     password = serializers.CharField(write_only=True)
-    # Not columns of User, so declared here. Optional, and blank-able, for
-    # everybody: whether they are required or refused depends on the role,
-    # which validate() derives. The validators are the ones a field generated
-    # from the user's old columns had, in the same order, so the errors read
-    # the same.
+    # Required or refused depending on the role, checked in validate().
     matricola = serializers.CharField(
         max_length=10,
         required=False,
@@ -89,9 +77,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # Only reached once every field is valid, so the email is known to be
-        # institutional and the role can be derived here, where the checks
-        # that depend on it run.
         attrs["role"] = ROLE_BY_EMAIL_DOMAIN[attrs["email"].rsplit("@", 1)[-1]]
         account = {
             key: value
@@ -100,9 +85,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         }
         candidate = User(**account)
         errors = self.student_data_errors(attrs)
-        # Validated here rather than as a field validator: the similarity check
-        # needs the user the password belongs to — their email and names —
-        # which a field validator lacks.
+        # Here, because the similarity check needs the user's email and names.
         try:
             validate_password(attrs["password"], user=candidate)
         except DjangoValidationError as error:
@@ -113,11 +96,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def student_data_errors(attrs):
-        """Required of a student, refused from anyone else.
-
-        Refused rather than dropped: an employee sending a matricola has most
-        likely typed the wrong address, and ignoring it would hide that.
-        """
+        """Student fields are required of a student and refused from anyone else."""
         errors = {}
         for field in STUDENT_FIELDS:
             given = bool(attrs.get(field, "").strip())
@@ -129,8 +108,6 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         student = {field: validated_data.pop(field, "") for field in STUDENT_FIELDS}
-        # One transaction: a student whose profile cannot be written must not
-        # be left behind as an account without one.
         with transaction.atomic():
             user = User.objects.create_user(**validated_data)
             if user.role == User.Role.STUDENT:
@@ -149,10 +126,8 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        # authenticate() rejects inactive users too, so an account an admin has
-        # deactivated cannot log in. The error stays generic on purpose: telling
-        # the caller that the account exists but is deactivated would leak who
-        # is registered.
+        # Generic error on purpose, also for inactive users: it does not reveal
+        # who is registered.
         user = authenticate(username=attrs["email"].lower(), password=attrs["password"])
         if user is None:
             raise serializers.ValidationError("Invalid email or password.")
@@ -161,11 +136,7 @@ class LoginSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Read-only representation of a user.
-
-    The student data comes from the student profile. Everybody else has none,
-    and gets ``""`` for it, so the shape is the same for every role.
-    """
+    """Read-only user; non-students get ``""`` for the student fields."""
 
     matricola = serializers.SerializerMethodField()
     degree_programme = serializers.SerializerMethodField()

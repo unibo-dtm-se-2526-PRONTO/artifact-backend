@@ -1,9 +1,5 @@
-# Each FAQ and inquiry is linked to the office with its code. An office that
-# does not exist yet — a database where FAQs were imported but `seed_offices`
-# never ran — is created as `seed_offices` would create it.
-#
-# Going back writes each row's office code again. Offices created here stay:
-# by then they may have staff and appointments.
+# Links each FAQ and inquiry to the office with its code, creating missing
+# offices as `seed_offices` would. Offices created here stay when reversing.
 
 from django.db import migrations
 

@@ -1,7 +1,5 @@
 services:
-  # A local PostgreSQL, for running the backend and the test suite against the
-  # same database engine as production. The credentials are for this machine
-  # only: the container is reachable from localhost and nowhere else.
+  # Local PostgreSQL, reachable from localhost only.
   db:
     image: postgres:16
     environment:
@@ -18,8 +16,7 @@ services:
       timeout: 5s
       retries: 15
 
-  # The vector store of semantic FAQ matching (faq/vector_index.py). Same
-  # version as the chromadb client in poetry.lock: bump them together.
+  # Vector store for semantic FAQ matching; same version as chromadb in poetry.lock.
   chroma:
     image: chromadb/chroma:1.5.9
     ports:
@@ -27,7 +24,7 @@ services:
     volumes:
       - chromadata:/data
     healthcheck:
-      # The image has neither curl nor wget: bash can open the port itself.
+      # No curl or wget in the image.
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
       interval: 2s
       timeout: 5s
@@ -40,8 +37,7 @@ services:
     env_file:
       - path: .env
         required: false
-    # These win over .env, so the backend in compose always talks to the db
-    # container above, whatever database .env points a local run at.
+    # Override .env: always use the db container.
     environment:
       DB_NAME: pronto
       DB_USER: pronto
@@ -51,8 +47,7 @@ services:
       DB_SSLMODE: disable
       CHROMA_HOST: chroma
       CHROMA_PORT: "8000"
-      # The embedding model is downloaded on first use; a volume keeps it
-      # across restarts.
+      # Keeps the downloaded embedding model.
       FASTEMBED_CACHE_PATH: /fastembed
     depends_on:
       db:
@@ -63,9 +58,7 @@ services:
       - .:/app
       - fastembed:/fastembed
 
-  # The Vue frontend, on http://localhost:5173 (the origin the backend allows
-  # in CORS_ALLOWED_ORIGINS). Its sources live in ../artifact-frontend; the
-  # browser calls the backend at the VITE_API_URL of that folder's .env.
+  # The Vue frontend from ../artifact-frontend, on http://localhost:5173.
   frontend:
     build:
       context: ../artifact-frontend
@@ -76,7 +69,7 @@ services:
       - backend
     volumes:
       - ../artifact-frontend:/app
-      # Keeps the node_modules installed in the image, instead of the host's.
+      # Keeps the image's node_modules.
       - /app/node_modules
 
 volumes:

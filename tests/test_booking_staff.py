@@ -1,9 +1,4 @@
-"""Tests for the endpoints employees use to set up their availability.
-
-The rules behind them live in `test_booking_shifts.py`; what is checked here is
-the HTTP contract — who may call what, what comes back, and which refusals
-reach the client and how.
-"""
+"""Tests for the endpoints employees use to set up their availability."""
 
 from datetime import time
 
@@ -68,8 +63,7 @@ def test_an_employee_chooses_their_office(newcomer_client, newcomer, office):
 def test_the_office_is_chosen_only_once(
     newcomer_client, newcomer, office, other_office
 ):
-    """Changing office would strand the appointments already booked with the
-    old one, so after the first choice only an admin can move someone."""
+    """After the first choice, only an admin changes an employee's office."""
     newcomer_client.post(PROFILE_URL, {"office": office.code})
 
     response = newcomer_client.post(PROFILE_URL, {"office": other_office.code})
@@ -249,8 +243,7 @@ def test_a_shift_holding_appointments_is_kept_and_they_are_listed(
 
 @pytest.mark.django_db
 def test_shifts_cannot_be_edited_in_place(employee_client, employee):
-    """Replacing a shift is a withdrawal and a new declaration, so both
-    rules — the grid and the booked appointments — apply to every change."""
+    """Replacing a shift applies both the grid and the booked-appointments rules."""
     monday = employee.shifts.get(weekday=MONDAY)
 
     response = employee_client.patch(shift_url(monday.pk), {"end_time": "12:00"})

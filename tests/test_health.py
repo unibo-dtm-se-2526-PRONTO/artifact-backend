@@ -1,8 +1,4 @@
-"""Tests for the health-check endpoint.
-
-This is the reference example for API tests: use DRF's APIClient, hit the URL
-the frontend would hit, and assert on status code and response body.
-"""
+"""Tests for the health-check endpoint."""
 
 import re
 
@@ -23,5 +19,5 @@ def test_health_endpoint_returns_ok():
 
 
 def test_the_version_is_a_semantic_version():
-    # semantic-release writes it there; a semantic version, never a placeholder
+    # Written by semantic-release: a semantic version.
     assert re.fullmatch(r"\d+\.\d+\.\d+(-[\w.]+)?", settings.VERSION)

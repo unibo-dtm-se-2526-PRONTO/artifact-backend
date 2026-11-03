@@ -1,7 +1,5 @@
 [tool.poetry]
-# The name the project is published under on PyPI (or TestPyPI, see
-# release.config.mjs). The package holds the Django project and its apps; the
-# frontend is not part of it.
+# The backend only; the frontend is not in the package.
 name = "pronto-helpdesk"
 version = "1.0.1"
 packages = [
@@ -17,8 +15,7 @@ license = "Apache-2.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-# CI and the Dockerfile run on Python 3.12: update .github/workflows/check.yml
-# and the Dockerfile together if that changes
+# CI and the Dockerfile use Python 3.12
 python = ">= 3.10.0 < 4.0.0"
 django = "^5.2"
 python-dotenv = "^1.0.1"
@@ -71,6 +68,5 @@ markers = [
 ignore_missing_imports = true
 
 [tool.ruff.lint]
-# Django reads list_display, Meta.fields, a migration's operations and the like
-# as class attributes it never mutates: lists there are the idiom, not a bug.
+# Django's class-level lists (list_display, Meta.fields...) are never mutated.
 ignore = ["RUF012"]

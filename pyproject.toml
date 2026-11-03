@@ -33,7 +33,7 @@ fastembed = ">=0.8.1,<0.10.0"
 coverage = "^7.4.0"
 mypy = ">=1.10.1,<3.0.0"
 poethepoet = "^0.37.0"
-pytest = "^8.3.5"
+pytest = ">=8.3.5,<10.0.0"
 ruff = ">=0.15,<0.18"
 pytest-django = "^4.2.0"
 

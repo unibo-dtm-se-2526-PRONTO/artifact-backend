@@ -123,7 +123,7 @@ def test_every_user_needs_a_first_and_last_name(role):
 @pytest.mark.django_db
 @pytest.mark.parametrize("field", ["first_name", "last_name"])
 def test_the_database_refuses_an_empty_name(field):
-    # Saved from code, nothing but the database stops it.
+    # Only the database stops it when saving from code.
     with pytest.raises(IntegrityError):
         User.objects.create_user(
             email="anna.bianchi@unibo.it",
@@ -263,8 +263,7 @@ def test_two_students_cannot_share_a_matricola():
 @pytest.mark.django_db
 @pytest.mark.parametrize("field", ["matricola", "degree_programme"])
 def test_the_database_refuses_an_empty_student_field(field):
-    # Saved from code, nothing but the database stops it: only full_clean()
-    # knows the fields are required.
+    # Only the database stops it when saving from code.
     profile = make_student("mario.rossi@studio.unibo.it")
     setattr(profile, field, "")
 
@@ -280,7 +279,6 @@ def test_deleting_a_user_deletes_their_student_profile():
 
 
 def test_the_student_data_is_not_on_the_user_table():
-    # Nobody but a student has any, so the user row has no column for it.
     columns = {field.name for field in User._meta.get_fields()}
 
     assert not {"matricola", "degree_programme"} & columns

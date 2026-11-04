@@ -1,8 +1,4 @@
-"""Tests for the booking models: employee profiles and appointments.
-
-`office`, `student` and `employee` come from `tests/conftest.py`. The
-constraint on (employee, slot) is tested in `tests/test_booking_constraints.py`.
-"""
+"""Tests for the booking models; the (employee, slot) constraint has its own file."""
 
 from datetime import timedelta
 
@@ -71,8 +67,6 @@ def test_deleting_an_employees_account_removes_their_profile(employee):
 
 @pytest.mark.django_db
 def test_an_office_with_staff_cannot_be_deleted(employee, office):
-    # PROTECT: emptying an office has to be a deliberate act, never a side
-    # effect of deleting the office row.
     with pytest.raises(ProtectedError):
         office.delete()
 

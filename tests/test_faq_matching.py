@@ -1,13 +1,6 @@
-"""Tests for matching a student's question with the published FAQs (FR7).
+"""Tests for full-text FAQ matching (FR7), mostly marked `postgres`.
 
-The matching is PostgreSQL full-text search, so nearly everything here is
-marked `postgres`: on SQLite it would not be skipped for a good reason but fail
-for a bad one. The one exception checks exactly that the service refuses to
-run anywhere else.
-
-The knowledge base below is small but written like the real one: questions
-starting with "Come ...", answers that mention the same portals over and over.
-That repetition is what the threshold has to see through.
+The FAQs below mimic the real ones: similar openings, the same portals.
 """
 
 import pytest
@@ -97,8 +90,7 @@ def test_without_an_office_every_office_is_searched(knowledge_base, internship):
 @pytest.mark.postgres
 @pytest.mark.django_db
 def test_italian_words_are_matched_by_their_stem(knowledge_base, certificate):
-    # Plural against singular, and a verb in another person: "pagano" is not
-    # "pago", but both are the stem "pag".
+    # Plural and singular share the stem "pag".
     assert (
         find_best_match("certificati iscrizioni", OfficeCode.ADMIN_OFFICE, "it").faq
         == certificate
@@ -114,8 +106,7 @@ def test_italian_words_are_matched_by_their_stem(knowledge_base, certificate):
 @pytest.mark.postgres
 @pytest.mark.django_db
 def test_a_question_made_only_of_stop_words_matches_nothing(knowledge_base):
-    # Every FAQ starts with "Come": without the Italian stop words, this would
-    # match all of them equally.
+    # Every FAQ starts with "Come", an Italian stop word.
     assert find_best_match("Come e dove?", OfficeCode.ADMIN_OFFICE, "it") is None
 
 
@@ -153,8 +144,7 @@ def test_an_unpublished_faq_is_never_suggested(certificate):
 def test_without_a_match_in_the_office_every_office_is_searched(
     knowledge_base, internship
 ):
-    # The student chose the wrong office: the answer is the internships
-    # office's, and the match says so.
+    # Wrong office chosen: the match is the internships office's FAQ.
     match = find_best_match(
         "Come si attiva un tirocinio?", OfficeCode.ADMIN_OFFICE, "it"
     )
@@ -169,10 +159,7 @@ def test_without_a_match_in_the_office_every_office_is_searched(
 def test_a_good_enough_match_in_the_office_wins_over_a_better_one_elsewhere(
     settings, knowledge_base
 ):
-    # All three words are in the internship FAQ, only one in the tutor FAQ:
-    # the office asked about still comes first, as long as its answer clears
-    # the threshold. That is the rule under test, not the threshold, which is
-    # set low enough here for a FAQ that shares a single word to clear it.
+    # The chosen office comes first if its FAQ clears the (low) threshold here.
     settings.FAQ_MATCH_MIN_RANK = 0.1
     tutor = make_faq(
         OfficeCode.ADMIN_OFFICE,
@@ -204,9 +191,7 @@ def test_an_unrelated_question_has_no_match(knowledge_base):
 def test_a_long_question_that_covers_a_faq_only_in_part_is_left_to_semantic_search(
     knowledge_base,
 ):
-    # Two of its eight meaningful words are about fees (rank 0.15). On the real
-    # FAQs, a rank that low is as often a wrong answer as a right one, so full
-    # text leaves it to semantic search, which is off in this test.
+    # Rank 0.15 is below FAQ_MATCH_MIN_RANK, and semantic search is off.
     match = find_best_match(
         "Vorrei sapere se posso iscrivermi a un corso singolo pagando le tasse ridotte",
         OfficeCode.ADMIN_OFFICE,
@@ -221,9 +206,7 @@ def test_a_long_question_that_covers_a_faq_only_in_part_is_left_to_semantic_sear
 def test_one_incidental_word_in_an_answer_stays_under_the_default_threshold(
     knowledge_base,
 ):
-    # "online" is in the answers of two FAQs, as the name of the portal. A
-    # question that shares only that word with them is not about them, and
-    # this is the overlap FAQ_MATCH_MIN_RANK is there to reject.
+    # Sharing only the portal name "online" is not enough.
     assert (
         find_best_match(
             "Vorrei sapere se la mensa del campus ha un menù online",
@@ -250,9 +233,7 @@ def test_a_score_equal_to_the_threshold_is_a_match(settings, certificate):
 
 @pytest.mark.django_db
 def test_matching_refuses_to_run_without_postgres(monkeypatch, certificate):
-    # Runs on both databases: the vendor is faked, so the SQLite run and the
-    # PostgreSQL run check the same thing. Returning "no match" here would be
-    # indistinguishable from a knowledge base with no answer.
+    # The vendor is faked, so this runs on both databases.
     monkeypatch.setattr(connection, "vendor", "sqlite")
 
     with pytest.raises(MatchingUnavailable):

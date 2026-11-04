@@ -25,16 +25,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
-# Under pytest, or `manage.py test`: the test database and the test-only
-# fallbacks below apply.
 TESTING = "PYTEST_VERSION" in os.environ or "test" in sys.argv
 
-# The release this code belongs to. semantic-release writes it into
-# pyproject.toml (`poetry version`) on every release, so it is read from there
-# rather than kept twice. A regular expression rather than tomllib, which
-# needs Python 3.11 while pyproject.toml still allows 3.10.
-# Installed from PyPI there is no pyproject.toml next to the code: the version
-# then comes from the metadata of the installed package, written at build time.
+# semantic-release writes the version into pyproject.toml. A regex instead of
+# tomllib, which needs Python 3.11. An installed package has no pyproject.toml,
+# so the version comes from its metadata.
 try:
     _pyproject = (BASE_DIR / "pyproject.toml").read_text(encoding="utf-8")
 except FileNotFoundError:
@@ -50,12 +45,7 @@ else:
 
 
 def env_flag(name, default=False):
-    """Read a boolean from the environment, where everything is a string.
-
-    Written out rather than `os.getenv(name) == "True"` because DEBUG=true and
-    DEBUG=1 are what people actually write in a .env file, and silently reading
-    either as False would turn debugging off without saying so.
-    """
+    """Read a boolean from the environment, accepting 1/true/yes/on."""
     value = os.getenv(name)
     if value is None:
         return default
@@ -65,8 +55,6 @@ def env_flag(name, default=False):
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
 
-# Off unless asked for: a deployment that forgets to set DEBUG gets the safe
-# answer, instead of serving tracebacks and settings to whoever triggers a 500.
 DEBUG = env_flag("DEBUG")
 
 # Comma-separated, e.g. ALLOWED_HOSTS=pronto.unibo.it,localhost
@@ -74,9 +62,7 @@ ALLOWED_HOSTS: list[str] = [
     host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",") if host.strip()
 ]
 
-# Django refuses every request when ALLOWED_HOSTS is empty and DEBUG is off, so
-# a local run with neither variable set would answer 400 to everything. In
-# debug the default is the developer's own machine, and nothing more.
+# With DEBUG on and no hosts set, allow the local machine only.
 if DEBUG and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
 
@@ -114,9 +100,7 @@ CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
 
 AUTH_USER_MODEL = "accounts.User"
 
-# These two defaults are load-bearing, not conveniences: LogoutView and MeView
-# in accounts/views.py declare no permission_classes of their own and rely on
-# IsAuthenticated being the default. Loosening it here silently opens them.
+# LogoutView and MeView rely on IsAuthenticated being the default.
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
@@ -128,16 +112,12 @@ REST_FRAMEWORK = {
 
 ROOT_URLCONF = "pronto.urls"
 
-# Email. In development the booking e-mails are printed to the console instead
-# of being delivered, so no SMTP account is needed to try the booking flow.
+# Printed to the console unless EMAIL_BACKEND says otherwise.
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@pronto.local")
-# SMTP, read only when EMAIL_BACKEND is set to
-# django.core.mail.backends.smtp.EmailBackend. Booking e-mails are sent after
-# the booking commits, so a slow server delays the response but never a
-# database transaction; the timeout keeps that delay bounded.
+# Used only by the SMTP backend.
 EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
@@ -174,22 +154,14 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
         "PORT": os.getenv("DB_PORT", "5432"),
-        # The hosted database only accepts encrypted connections, hence the
-        # default. The PostgreSQL in docker-compose.yml has no certificate and
-        # sets DB_SSLMODE=disable.
+        # Neon requires SSL; the compose database sets DB_SSLMODE=disable.
         "OPTIONS": {"sslmode": os.getenv("DB_SSLMODE", "require")},
     }
 }
 
 
 def postgres_from_url(url):
-    """Django database settings for a postgres://user:password@host:port/name URL.
-
-    One variable rather than a TEST_DB_* copy of every DB_* key, so a test run
-    never picks up the development credentials from .env by accident. The
-    query string may carry `sslmode`; without it libpq tries SSL and falls back
-    to a plain connection, which suits both a local container and CI.
-    """
+    """Django database settings for a postgres://user:password@host:port/name URL."""
     parts = urlsplit(url)
     if parts.scheme not in {"postgres", "postgresql"}:
         raise ImproperlyConfigured(
@@ -206,12 +178,8 @@ def postgres_from_url(url):
     }
 
 
-# Tests run against an in-memory SQLite database by default: no credentials, no
-# network, so the suite is fast and needs nothing but Python. SQLite is not
-# PostgreSQL, though — no full-text search, no real row locking — so setting
-# TEST_DATABASE_URL runs the same suite against a PostgreSQL server instead,
-# as CI does. Django creates and drops its own test_<name> database there.
-# Development and production keep using the DB_* settings above.
+# Tests use in-memory SQLite, or PostgreSQL if TEST_DATABASE_URL is set (as in
+# CI): SQLite has no full-text search and no row locking.
 if TESTING:
     test_database_url = os.getenv("TEST_DATABASE_URL")
     if test_database_url:
@@ -221,8 +189,6 @@ if TESTING:
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": ":memory:",
         }
-    # CI has no .env file, so no SECRET_KEY. Outside tests a missing SECRET_KEY
-    # must still be a hard error, so this fallback stays scoped to test runs.
     SECRET_KEY = SECRET_KEY or "django-insecure-key-for-tests-only"
 
 
@@ -250,10 +216,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-# The helpdesk is in Cesena and its timetable is written in local time: a shift
-# declared 9-17 is 9-17 at the office, not 9-17 UTC. Every aware
-# datetime the booking grid builds goes through the active timezone, so this
-# is what makes a slot mean what the staff and the students think it means.
+# Shifts and slots are in the office's local time.
 TIME_ZONE = "Europe/Rome"
 
 USE_I18N = True
@@ -272,38 +235,17 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-# FAQ matching (faq/matching.py)
-# The lowest full-text rank at which a FAQ is suggested as the answer to a
-# question. A word of the question found in a FAQ's question counts about 0.6,
-# one found only in its answer about 0.25, and the rank is the average over the
-# meaningful words of the question. Calibrated on the 178 real FAQs with 21
-# rephrased questions and 10 that no FAQ answers: below 0.45, wrong answers
-# score as high as right ones (a single shared word such as "ora" or "campus"
-# reaches 0.2-0.3), and at 0.1 every one of the 10 got a FAQ. What full text
-# lets through is left to semantic search (FAQ_SEMANTIC_MIN_SIMILARITY below).
+# Minimum full-text rank for a FAQ to be suggested, calibrated on the real FAQs.
 FAQ_MATCH_MIN_RANK = 0.45
 
 
-# Semantic FAQ matching (faq/vector_index.py)
-# Chroma holds the embeddings of the published FAQs and is asked only when
-# full-text search finds nothing (see faq/matching.py). With CHROMA_HOST empty,
-# semantic matching is off and full-text search works alone; docker-compose.yml
-# points it at its chroma service. Tests never reach a server: the ones about
-# semantic matching give it an in-memory store of their own.
+# Semantic matching runs only when full-text search finds nothing. An empty
+# CHROMA_HOST turns it off; tests use an in-memory store.
 CHROMA_HOST = os.getenv("CHROMA_HOST", "")
 CHROMA_PORT = int(os.getenv("CHROMA_PORT") or "8000")
 if TESTING:
     CHROMA_HOST = ""
-# Multilingual, so Italian and English questions are embedded equally well. It
-# runs on ONNX through fastembed, without PyTorch, and is downloaded on first
-# use (about 220 MB).
+# Multilingual (it/en), run with fastembed on ONNX.
 FAQ_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-# The lowest cosine similarity, between the question and a FAQ's question, at
-# which a FAQ is suggested; its scale has nothing to do with FAQ_MATCH_MIN_RANK.
-# Same calibration as above: rephrased questions find their FAQ at 0.70-1.00,
-# Italian and English alike, while the closest FAQ to a question none answers
-# scores 0.37-0.65 ("A che ora apre la mensa?" -> an open day, 0.65). Together
-# with full text at 0.45: 14 of 21 answered right, 2 wrong, none of the 10
-# answered. Inquiry.matched_by and resolved are there to check this on real
-# questions.
+# Minimum cosine similarity for a FAQ to be suggested, calibrated on the real FAQs.
 FAQ_SEMANTIC_MIN_SIMILARITY = 0.7

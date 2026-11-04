@@ -1,25 +1,7 @@
 """Fixtures shared by more than one test file.
 
-A fixture moves here once a second file needs it. The booking slice is tested
-from several angles — models, constraints, services, offices and appointments —
-and all of them need the same cast: an office, someone staffing it, a student,
-and a day in the future that is not a weekend. The accounts and FAQ tests share
-less: an anonymous `client`, the `PASSWORD` every test user has, and
-`authenticate` to give a user a token. FAQs and questions are filed under an
-office: `office_for` gives the one with a code, creating it if needed.
-
-Every employee made here works Monday to Friday, 9 to 17, unless a test asks
-for other shifts. That is the timetable the helpdesk had before shifts existed,
-so the booking tests written against it still describe a real office.
-
-Fixture names are deliberately specific (`office`, `student`, `employee`)
-rather than generic, so nothing here shadows what another test file defines
-for itself. `client` is the exception, and on purpose: it replaces
-pytest-django's fixture of the same name with DRF's `APIClient`, a subclass of
-Django's test client that also speaks JSON (`format="json"`).
-
-It also holds the one hook every test file relies on: tests marked
-`@pytest.mark.postgres` are skipped unless the suite runs on PostgreSQL.
+Employees work Monday to Friday, 9 to 17, unless a test says otherwise.
+`client` is DRF's `APIClient`. Tests marked `postgres` are skipped on SQLite.
 """
 
 from datetime import datetime, time, timedelta
@@ -44,14 +26,7 @@ PASSWORD = "s3cret-passphrase"
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip the tests marked `postgres` when the database is not PostgreSQL.
-
-    Some behaviour cannot be observed on SQLite at all — full-text search does
-    not exist there, and it locks the whole database rather than a row — so a
-    test of it would fail for the wrong reason. Skipping says so in the report
-    instead. `connection.vendor` comes from the configured backend and needs no
-    connection, so this runs before any test touches the database.
-    """
+    """Skip the tests marked `postgres` when the database is not PostgreSQL."""
     if connection.vendor == "postgresql":
         return
     skip = pytest.mark.skip(reason="needs PostgreSQL: set TEST_DATABASE_URL")
@@ -65,7 +40,11 @@ WORKING_WEEK = [(weekday, time(9), time(17)) for weekday in range(5)]
 
 
 def next_working_day():
-    """The next Monday: always a weekday, always in the future."""
+    """The next Monday: always a weekday, always in the future.
+
+    On a Monday it is a week away, so a slot meant to be over goes two
+    weeks back, not one.
+    """
     today = timezone.localtime(timezone.now()).date()
     return today + timedelta(days=(7 - today.weekday()) or 7)
 
@@ -75,17 +54,15 @@ def slot_at(day, hour, minute=0):
     return timezone.make_aware(datetime.combine(day, time(hour, minute)))
 
 
-# Matricole for the students a test does not give one: unique, and well formed.
+# Unique, well-formed matricole for students created without one.
 matricole = (f"{n:010d}" for n in count(1))
 
 
 def make_user(email, role, **fields):
     """An active user; `fields` sets anything else, such as the names.
 
-    Every user has a first and a last name: unless given, they are read off
-    the address, "mario.rossi@" being Mario Rossi. A student also gets the
-    student profile registration would have given them, from the `matricola`
-    and `degree_programme` in `fields`, or made up.
+    Names default to the address ("mario.rossi@" is Mario Rossi); a student
+    also gets a student profile.
     """
     first, _, last = email.split("@")[0].partition(".")
     fields.setdefault("first_name", first.capitalize())
@@ -108,12 +85,7 @@ def make_user(email, role, **fields):
 
 
 def make_employee(office, email="anna.bianchi@unibo.it", shifts=WORKING_WEEK):
-    """An employee of `office`, on duty for each ``(weekday, start, end)``.
-
-    Shifts are written straight to the table: the rules for declaring them are
-    what `test_booking_shifts.py` tests, not something every fixture should
-    depend on.
-    """
+    """An employee of `office`, with shifts written straight to the table."""
     employee = EmployeeProfile.objects.create(
         user=make_user(email, User.Role.EMPLOYEE), office=office
     )
@@ -125,8 +97,7 @@ def make_employee(office, email="anna.bianchi@unibo.it", shifts=WORKING_WEEK):
 
 
 def office_for(code):
-    """The office with `code`; if there is none yet, it is created as
-    `seed_offices` would create it."""
+    """The office with `code`, created as `seed_offices` would if missing."""
     return seed_office(Office, code)[0]
 
 

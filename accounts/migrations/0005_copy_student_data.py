@@ -1,14 +1,6 @@
-# Each student's matricola and degree programme move from the user row to a
-# new student profile. Nobody else gets one: an employee or an admin had both
-# columns empty.
-#
-# Data the old columns allowed but a profile cannot hold — a student missing
-# either value, or someone else with one — stops the migration rather than
-# being dropped or invented. Going back writes the values onto the user again.
-#
-# A migration of its own, between the one creating the table and the one
-# dropping the columns: on PostgreSQL, a table cannot be altered in the same
-# transaction that has just written rows pointing to it.
+# Moves each student's matricola and degree programme to a student profile.
+# Data a profile cannot hold stops the migration. A separate migration because
+# PostgreSQL cannot alter a table in the transaction that wrote rows to it.
 
 from django.db import migrations
 

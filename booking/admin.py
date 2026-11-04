@@ -4,8 +4,7 @@ from .models import Appointment, EmployeeProfile, Shift
 
 
 class ShiftInline(admin.TabularInline):
-    # Written straight to the table: the grid and overlap rules of
-    # `declare_shift` are not applied here, so an admin has to keep to them.
+    # The rules of `declare_shift` are not applied here.
     model = Shift
     extra = 0
 

@@ -1,9 +1,4 @@
-"""Who may call what, by role.
-
-Here rather than in an app, like `pronto.enums`: `booking` and `faq` both
-restrict endpoints to students, and `booking` already depends on `faq`, so
-`faq` importing from `booking` would close a cycle.
-"""
+"""Permissions by role, shared by `booking` and `faq`."""
 
 from rest_framework.permissions import BasePermission
 
@@ -11,12 +6,7 @@ from pronto.enums import Role
 
 
 class IsStudent(BasePermission):
-    """Only students ask questions and book appointments; employees answer them.
-
-    Read through ``getattr`` rather than ``request.user.role``: an anonymous
-    user has no role, and this has to deny rather than raise if it is ever used
-    without ``IsAuthenticated`` in front of it.
-    """
+    """Students only. ``getattr`` so an anonymous user is denied, not an error."""
 
     message = "Only students can do this."
 
@@ -25,14 +15,7 @@ class IsStudent(BasePermission):
 
 
 class IsEmployee(BasePermission):
-    """Only the staff close appointments and set up their own availability.
-
-    Load-bearing rather than decorative on completion. `AppointmentQuerysetMixin`
-    scopes an appointment to the caller, so a student reaches their own
-    appointment perfectly well; without this check they could declare their own
-    question answered. Read through ``getattr`` for the same reason as
-    `IsStudent`.
-    """
+    """Employees only, e.g. to complete an appointment or declare shifts."""
 
     message = "Only employees can do this."
 

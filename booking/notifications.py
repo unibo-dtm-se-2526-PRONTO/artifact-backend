@@ -1,20 +1,8 @@
-"""The e-mails an appointment's life cycle sends (FR13-FR15).
+"""Appointment e-mails (FR13-FR15), sent after the transaction commits.
 
-Each function is called by `booking.services` from inside the transaction that
-changes the appointment, and only *registers* the e-mails: they are sent once
-that transaction commits. A booking rolled back therefore tells nobody, and a
-slow or failing mail server never holds a database transaction open.
-
-Delivery is best-effort. A failed e-mail is logged, never raised: by the time
-it is sent the booking is already committed, and the student is better served
-by a booking without its confirmation than by an error for a booking that
-exists. Each e-mail is sent on its own, so one bounced address does not stop
-the other person from hearing about it.
-
-Students are written to in the language they asked their question in;
-employees always in Italian. The texts live in
-``booking/templates/booking/email/``: the first line of each file is the
-subject, the rest is the body.
+A failed e-mail is logged, not raised. Students get their question's
+language, employees Italian. Templates are in
+``booking/templates/booking/email/``: first line subject, then body.
 """
 
 import logging
@@ -84,11 +72,7 @@ def appointment_booked(appointment):
 
 
 def appointment_cancelled(appointment, by):
-    """Tell whoever did not cancel (FR15).
-
-    The person who cancelled already knows. When someone else — an admin —
-    cancels, both the student and the employee are told.
-    """
+    """Tell whoever did not cancel (FR15); both, if an admin cancelled."""
     if by != appointment.student:
         _on_commit(
             appointment,
@@ -103,10 +87,9 @@ def appointment_cancelled(appointment, by):
 
 
 def when(slot, lang):
-    """`slot` in the helpdesk's local time, spelled out: "lunedì 5 ottobre 2026, 10:00".
+    """`slot` in local time, e.g. "lunedì 5 ottobre 2026, 10:00".
 
-    Written by hand rather than through the OS locale, which may not have
-    Italian installed and would then fall back to English without a word.
+    By hand, because the OS may lack the Italian locale.
     """
     local = timezone.localtime(slot)
     weekday = WEEKDAYS[lang][local.weekday()]
@@ -115,8 +98,6 @@ def when(slot, lang):
 
 
 def _on_commit(appointment, template, recipient, lang):
-    # Rendered now, while the appointment is as this transaction left it;
-    # only the sending waits for the commit.
     subject, body = _render(appointment, template, lang)
     transaction.on_commit(lambda: _send(subject, body, recipient.email))
 
@@ -143,6 +124,5 @@ def _send(subject, body, address):
             recipient_list=[address],
         )
     except Exception:
-        # Broad on purpose: SMTP errors, DNS failures and timeouts all mean the
-        # same thing here — the e-mail did not go, and the booking stands.
+        # Any failure: the booking stands anyway.
         logger.exception("Could not send %r to %s", subject, address)

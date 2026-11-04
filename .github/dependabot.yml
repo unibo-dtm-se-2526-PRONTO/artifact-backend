@@ -1,10 +1,6 @@
-# Dependabot opens the dependency updates as pull requests against develop,
-# once a week, and they reach master with the next release. Commit messages are
-# Conventional Commits (commitlint checks them like any other pull request):
-# chore(deps) and ci(deps) do not make a release by themselves, which is right
-# for updates that only move poetry.lock, package-lock.json or the workflows.
-# Patch and minor updates merge on their own once CI is green
-# (.github/workflows/dependabot-automerge.yml); majors wait for a person.
+# Weekly pull requests against develop. chore(deps) and ci(deps) make no
+# release by themselves. Patch and minor updates are merged by
+# dependabot-automerge.yml.
 version: 2
 updates:
   # Poetry: pyproject.toml and poetry.lock
@@ -51,9 +47,7 @@ updates:
       prefix: ci
       include: scope
 
-  # The images of the Dockerfiles and of docker-compose.yml: patches only. A new
-  # Python or Node version, or a new PostgreSQL major (which cannot read the data
-  # of the old one), is changed by hand, together with check.yml.
+  # Docker images: patches only; Python, Node and PostgreSQL majors by hand.
   - package-ecosystem: docker
     directory: /
     target-branch: develop

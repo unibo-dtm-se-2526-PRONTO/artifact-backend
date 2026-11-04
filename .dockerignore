@@ -18,3 +18,4 @@ tests/
 *.xlsx
 demo/
 db.sqlite3
+dist/

@@ -1,14 +1,7 @@
-"""Tests for semantic FAQ matching: the vector store and its matcher (IR4).
+"""Tests for semantic FAQ matching (IR4).
 
-No Chroma server and no embedding model: each test gets an in-memory Chroma
-collection, and `fake_embed` stands in for the model. The fake knows a few
-groups of words that mean the same thing ("certificato", "attestato") and
-nothing else, which is enough to tell a FAQ worded differently from the
-question apart from an unrelated one. How well the real model does that is a
-matter of calibration, not of these tests.
-
-Indexing, the matcher and the cascade run on SQLite. Only the tests that go
-through `find_best_match`, where full-text search runs first, need PostgreSQL.
+An in-memory Chroma and `fake_embed`, which knows a few synonyms; only
+the tests through `find_best_match` need PostgreSQL.
 """
 
 import logging
@@ -53,9 +46,7 @@ DIMENSIONS = sorted(set(CONCEPTS.values()))
 
 
 def fake_embed(texts):
-    """A unit vector per text, one dimension per concept it mentions. The
-    extra last dimension keeps a text without any concept from being the zero
-    vector, which has no direction to compare."""
+    """A unit vector per text, one dimension per concept, plus one so it is never zero."""
     vectors = []
     for text in texts:
         words = re.findall(r"\w+", text.lower())

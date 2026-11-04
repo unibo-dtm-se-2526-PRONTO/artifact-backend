@@ -1,5 +1,4 @@
-# Read by Docker in place of the frontend folder's own .dockerignore, as it
-# sits next to frontend.Dockerfile.
+# Used instead of the frontend folder's .dockerignore.
 .git
 node_modules/
 dist/

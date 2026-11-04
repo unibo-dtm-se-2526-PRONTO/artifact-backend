@@ -1,11 +1,4 @@
-"""Rebuild the vector store of semantic FAQ matching from the database.
-
-Saving or deleting a FAQ updates its entries on its own (`faq.signals`), but
-not when the vector store was down at that moment, nor after a bulk change
-that sends no signal, nor on a fresh, empty store. This catches up: it drops
-every entry and indexes each published FAQ again, so it is safe to run at any
-time, as often as needed.
-"""
+"""Rebuild the semantic FAQ index from the database. Safe to run any time."""
 
 from django.core.management.base import BaseCommand, CommandError
 

@@ -1,9 +1,4 @@
-"""Tests for the ``import_faqs`` management command.
-
-Each test writes a small workbook of invented rows to ``tmp_path``, laid out
-like the helpdesk export: ``Ufficio | Office | Domanda | Question | Risposta``,
-plus ``Answer`` in the tests about the English answer.
-"""
+"""Tests for ``import_faqs``, on small workbooks written to ``tmp_path``."""
 
 from io import StringIO
 
@@ -127,8 +122,7 @@ def test_an_office_already_in_the_database_is_used_as_it_is(other_office, workbo
 
 @pytest.mark.django_db
 def test_the_italian_answer_stands_in_for_the_missing_english_one(workbook):
-    # The sheet has no English answer; an empty one would show English
-    # readers nothing at all, the Italian text at least answers them.
+    # No English answer in the sheet: the Italian one is used.
     run(workbook)
 
     stored = Faq.objects.get(question_it="Come mi iscrivo?")
@@ -195,8 +189,7 @@ def test_the_italian_question_stands_in_for_a_missing_english_one(tmp_path):
 
 @pytest.mark.django_db
 def test_a_long_question_is_imported_whole(tmp_path):
-    # The real export has a question of 308 characters: context first, then
-    # the question itself.
+    # The real export has a 308-character question.
     question = "Sono uno studente iscritto al secondo anno. " * 7 + "Come faccio?"
     path = write_workbook(
         tmp_path / "f.xlsx", ("Tirocini", "Internships", question, None, "R.")
@@ -362,8 +355,7 @@ def test_a_changed_english_answer_updates_the_existing_faq(tmp_path):
 def test_the_english_answer_in_the_sheet_replaces_the_one_in_the_admin(
     tmp_path, workbook
 ):
-    # The sheet is the source of truth for both answers, as it already is for
-    # the Italian one: an edit made in the admin lasts until the next import.
+    # The sheet wins over edits made in the admin.
     run(workbook)
     Faq.objects.filter(question_it="Come mi iscrivo?").update(
         answer_en="Written in the admin."

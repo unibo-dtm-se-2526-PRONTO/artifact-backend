@@ -6,8 +6,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from offices.models import Office
-from tests.conftest import make_employee, slot_at
 from pronto.enums import OfficeCode
+from tests.conftest import make_employee, slot_at
 
 OFFICES_URL = "/api/offices/"
 

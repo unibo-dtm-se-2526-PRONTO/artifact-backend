@@ -1,9 +1,4 @@
-"""Asking a question and closing it (US2a-US2c).
-
-Views never create or change an `Inquiry` themselves: they go through here, so
-the rule that only a suggested answer can resolve a question lives in one
-place.
-"""
+"""Asking a question and closing it (US2a-US2c)."""
 
 from .matching import find_best_match
 from .models import Inquiry
@@ -14,14 +9,9 @@ class InquiryError(Exception):
 
 
 def ask_question(office, text, language):
-    """Record a student's question and the FAQ that best answers it, if any.
+    """Record a question and the FAQ that best answers it, if any.
 
-    `office` is the one the student chose, or None. Without one the
-    question is filed under the office of the suggested FAQ, or under none if
-    no FAQ was relevant enough.
-
-    The search runs before anything is written, so a database that cannot
-    search (see `MatchingUnavailable`) leaves no half-recorded question behind.
+    Without `office`, it takes the office of the suggested FAQ.
     """
     match = find_best_match(text, office.code if office else None, language)
     if office is None and match is not None:
@@ -37,11 +27,7 @@ def ask_question(office, text, language):
 
 
 def resolve_inquiry(inquiry):
-    """Record that the suggested answer resolved the question (US2c).
-
-    Idempotent: resolving twice is the same fact stated twice, and a client
-    retrying after a lost response should not be told off for it.
-    """
+    """Record that the suggested answer resolved the question (US2c). Idempotent."""
     if inquiry.matched_faq_id is None:
         raise InquiryError(
             "No answer was suggested for this question, so none can resolve it."

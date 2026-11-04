@@ -1,14 +1,4 @@
-"""Create the helpdesk's offices, one per ``OfficeCode``.
-
-Nothing else creates them up front: an office is data, not schema, and a fresh
-database has none, so no employee can choose one and nothing can be booked.
-This is run once per database, after ``migrate``.
-
-It only fills in what is missing. An office that already exists is left as it
-is, since its names, address or slot length may have been changed in the admin
-since, and running the command again must not undo that. What a new office
-looks like is decided in `offices.seed`.
-"""
+"""Create the missing helpdesk offices. Run once per database after ``migrate``."""
 
 from django.core.management.base import BaseCommand
 from django.db import transaction

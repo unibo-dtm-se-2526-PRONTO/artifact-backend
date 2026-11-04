@@ -1,9 +1,4 @@
-"""Tests for the public FAQ endpoints.
-
-The FAQ slice replaces the phone helpdesk it automates, so reading it must not
-require an account: these tests hit the endpoints with an anonymous client on
-purpose.
-"""
+"""Tests for the public FAQ endpoints, called without an account."""
 
 import pytest
 from rest_framework import status

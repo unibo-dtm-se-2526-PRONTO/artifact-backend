@@ -12,12 +12,14 @@ jobs:
   release:
     name: Release
     concurrency:
-      # Only one release job at a time. Strictly sequential.
-      group: deploy
+      # Only one release job at a time on a branch: strictly sequential on
+      # master, where releases are real. The dry runs of other branches and of
+      # pull requests have a group each, so they do not cancel one another.
+      group: deploy-${{ github.ref }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # all history
 
@@ -36,7 +38,7 @@ jobs:
       # Poetry records the new version in pyproject.toml (`poetry version`),
       # then builds the package and uploads it (`poetry publish --build`)
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -50,9 +52,19 @@ jobs:
         id: get-node-version
         run: echo version=$(jq -r .engines.node package.json) >> $GITHUB_OUTPUT
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ steps.get-node-version.outputs.version }}
+
+      # The release pushes the Docker image to GHCR with the run's token,
+      # which packages: write above allows. Only real releases push.
+      - name: Log in to GHCR
+        if: github.ref_name == 'master' || github.ref_name == 'main'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Release
         shell: bash
@@ -65,13 +77,13 @@ jobs:
           # release commit from semantic-release-bot. Its pushes start no
           # other workflow, which the release commit skips anyway ([skip ci]).
           GITHUB_TOKEN: ${{ github.token }}
-          # One secret for both indexes: it holds a TestPyPI token while
-          # releases go to TestPyPI, a PyPI token once they go to PyPI.
+          # One token per index, created on test.pypi.org and pypi.org
+          POETRY_PYPI_TOKEN_TESTPYPI: ${{ secrets.TEST_PYPI_TOKEN }}
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
-          POETRY_PYPI_TOKEN_TESTPYPI: ${{ secrets.PYPI_TOKEN }}
-          # TestPyPI unless the repository variable PUBLISH_TO_PYPI is 'true'
-          # (Settings → Secrets and variables → Actions → Variables), so a
-          # missing variable can never publish to the real PyPI by mistake.
-          RELEASE_TEST_PYPI: ${{ vars.PUBLISH_TO_PYPI != 'true' }}
+          # Every release goes to TestPyPI; it also goes to PyPI only if the
+          # repository variable PUBLISH_TO_PYPI is 'true' (Settings → Secrets
+          # and variables → Actions → Variables), so a missing variable can
+          # never publish to the real PyPI by mistake.
+          RELEASE_PYPI: ${{ vars.PUBLISH_TO_PYPI == 'true' }}
           # dry run if not on main/master branch, or if initial commit
           RELEASE_DRY_RUN: ${{ steps.skip_release.outputs.skip == 'true' || (github.ref_name != 'master' && github.ref_name != 'main') }}

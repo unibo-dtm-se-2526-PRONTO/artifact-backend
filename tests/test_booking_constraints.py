@@ -1,11 +1,4 @@
-"""The database's own guarantee behind FR9.
-
-`tests/test_booking_services.py` checks that the service reacts well when it
-loses a race. These tests check the thing it relies on: the partial unique
-index that makes losing the race possible at all. They write through the ORM
-directly, bypassing the service, because that is the point — the invariant has
-to hold even for a caller that never asks the service's permission.
-"""
+"""The partial unique index behind FR9, tested through the ORM directly."""
 
 import pytest
 from django.db import IntegrityError, transaction
@@ -42,11 +35,7 @@ def test_an_employee_cannot_hold_two_booked_appointments_on_one_slot(
 def test_a_cancelled_appointment_does_not_block_the_slot(
     office, employee, student, day
 ):
-    """The constraint is conditional, and this is the reason it has to be.
-
-    An unconditional unique index would keep the slot locked forever by a
-    booking nobody is going to attend.
-    """
+    """Conditional, or a cancelled booking would block the slot forever."""
     slot = slot_at(day, 9)
     appointment(student, office, employee, slot, status=AppointmentStatus.CANCELLED)
 

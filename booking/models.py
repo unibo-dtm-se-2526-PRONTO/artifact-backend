@@ -7,11 +7,7 @@ from pronto.enums import AppointmentStatus, Language
 
 
 class EmployeeProfile(models.Model):
-    """The office an employee works for.
-
-    Kept out of `accounts` on purpose: the user model says *what* someone is
-    (their role), while the office they staff belongs to the booking slice.
-    """
+    """The office an employee works for."""
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -21,8 +17,6 @@ class EmployeeProfile(models.Model):
     )
     office = models.ForeignKey(
         Office,
-        # PROTECT: an office with staff assigned must be emptied deliberately,
-        # never removed as a side effect of deleting the office row.
         on_delete=models.PROTECT,
         related_name="employees",
         verbose_name="ufficio",
@@ -49,16 +43,9 @@ class Weekday(models.IntegerChoices):
 
 
 class Shift(models.Model):
-    """A stretch of a weekday an employee is on duty, every week.
+    """A weekly stretch of a weekday an employee is on duty, in local time.
 
-    Shifts are what an office's availability is computed from (FR4): the slots
-    are never stored. The times are the helpdesk's local ones (``TIME_ZONE``).
-
-    Two rules live in the service rather than here, because they depend on
-    other rows: a shift sits on its office's slot grid, and it overlaps no
-    other shift of the same employee (see `booking.services.declare_shift`).
-    As with `Appointment`, anything writing shifts outside that service has to
-    uphold them itself.
+    Grid and overlap rules are checked by `booking.services.declare_shift`.
     """
 
     employee = models.ForeignKey(
@@ -94,18 +81,8 @@ class Shift(models.Model):
 class Appointment(models.Model):
     """A booked slot between a student and a specific employee.
 
-    The employee is assigned when the booking is made, not later, so the field
-    is not nullable: an appointment nobody is responsible for is not a state
-    this app should be able to represent.
-
-    Note the invariant the schema deliberately does *not* enforce: that
-    ``employee.office`` equals ``office``. Expressing it in the database would
-    mean duplicating the office onto every appointment row and adding a check
-    constraint across a join, which Django cannot do portably. It is enforced
-    at service level instead, where the employee is chosen from
-    ``office.employees`` in the first place. Anything writing appointments
-    outside that service — a data migration, a fixture, the admin — has to
-    uphold it itself.
+    That ``employee.office`` equals ``office`` is enforced by `booking.services`,
+    not by the schema.
     """
 
     student = models.ForeignKey(
@@ -142,10 +119,7 @@ class Appointment(models.Model):
         choices=Language.choices,
         verbose_name="lingua della domanda",
     )
-    # The FAQ the student was shown and did not find helpful, so the employee
-    # starts from what the student already knows. Optional: there may have been
-    # no match at all. The dependency runs one way only — `faq` knows nothing
-    # of appointments, hence no reverse accessor.
+    # The FAQ the student did not find helpful, if any.
     suggested_faq = models.ForeignKey(
         "faq.Faq",
         on_delete=models.SET_NULL,
@@ -162,9 +136,7 @@ class Appointment(models.Model):
         verbose_name_plural = "appuntamenti"
         ordering = ["-slot"]
         constraints = [
-            # Conditional on purpose: an employee has at most one *booked*
-            # appointment per slot, so cancelling frees the slot for someone
-            # else while the cancelled row stays on record.
+            # Only BOOKED rows count, so cancelling frees the slot.
             models.UniqueConstraint(
                 fields=["employee", "slot"],
                 condition=Q(status=AppointmentStatus.BOOKED),

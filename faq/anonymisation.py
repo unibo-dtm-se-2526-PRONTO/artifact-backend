@@ -1,8 +1,4 @@
-"""Removing whatever could identify a requester from helpdesk text (NFR4).
-
-The FAQ knowledge base is seeded from real questions students asked the phone
-helpdesk, so before any of it is stored, ``anonymise`` replaces personal data
-with neutral placeholders:
+"""Remove personal data from helpdesk text before it is stored (NFR4).
 
 ========================  ================
 what                      placeholder
@@ -14,31 +10,9 @@ Italian tax codes         ``[TAX_CODE]``
 person names              ``[NAME]``
 ========================  ================
 
-Two deliberate exceptions keep the answers useful:
-
-- addresses on the institutional domain ``@unibo.it`` stay. Students write
-  from ``@studio.unibo.it`` (see ``accounts``), so an ``@unibo.it`` address
-  belongs to the university — usually the office mailbox the answer points
-  to — and never to the requester.
-- links are left whole. They are the university's pages, and rewriting digits
-  inside a path would only break them.
-
-Phone numbers get no such exception: a student's number and an office's look
-the same, and an office's number is published on its own page anyway.
-
-Names are the heuristic part. Only a name announced by a cue is recognised:
-an honorific (``Prof.``, ``dott.ssa``, ``Mr``...), a self-introduction
-(``mi chiamo``, ``sono``, ``my name is``...) or a sign-off closing the text
-(``Grazie, Mario Rossi``). A bare "Firstname Lastname" is not, because in this
-data capitalised pairs are almost always degree courses ("Ingegneria
-Biomedica"). After ``sono`` / ``I am`` two capitalised words are required for
-the same reason, so "sono Mario" alone slips through: a first name on its own
-is accepted as not identifying. What the patterns cannot see, a human reviews:
-the importer leaves the FAQs unpublished by default.
-
-Everything here is a pure function of the text, and applying it twice changes
-nothing more, which the importer relies on to use the anonymised question as
-its natural key.
+``@unibo.it`` addresses (office mailboxes) and links are kept. Names are
+recognised only after a cue: an honorific, a self-introduction or a sign-off.
+Applying it twice changes nothing more.
 """
 
 import re
@@ -53,8 +27,7 @@ _EMAIL = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)")
 # three digits and a check letter.
 _TAX_CODE = re.compile(r"\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b", re.IGNORECASE)
 
-# A number, of any length a matricola has had, that the text itself says is
-# one. The cue is kept: "matricola [STUDENT_ID]" still reads.
+# A number introduced as a matricola; the cue is kept.
 _STUDENT_ID_WITH_CUE = re.compile(
     r"(?P<cue>\b(?:matricola|matr\.|student\s+(?:id|number)|id\s+number)"
     r"(?:\s*(?:is|è|n\.|nr\.|no\.|number)?)?\s*[:.#]?\s*)"
@@ -62,15 +35,10 @@ _STUDENT_ID_WITH_CUE = re.compile(
     re.IGNORECASE,
 )
 
-# Current Unibo matricole are ten digits with leading zeros ("0000912345"):
-# distinctive enough to recognise without a cue. Shorter ones need the cue,
-# or amounts and codes would go too.
+# Current matricole (ten digits starting with 00) need no cue.
 _STUDENT_ID = re.compile(r"(?<!\d)00\d{8}(?!\d)")
 
-# Italian numbers, optionally with the +39 / 0039 prefix: mobiles start with
-# 3, landlines with 0 and a non-zero digit (so "00..." is left to the
-# matricola below). Digits may be grouped by single spaces, dots or dashes,
-# but never slashes or colons, so dates and times are not candidates.
+# Italian mobiles (3...) and landlines (0 then non-zero), optional +39/0039.
 _ITALIAN_PHONE = re.compile(
     r"(?<![\w+])(?P<prefix>(?:\+|00)39[ .-]?)?(?:3\d|0[1-9])(?:[ .-]?\d){4,9}(?!\d)"
 )
@@ -88,8 +56,7 @@ def _names(minimum):
     return rf"{_NAME_WORD}(?:[ \t]+{_NAME_WORD}){{{minimum - 1},2}}"
 
 
-# "Ing." is left out on purpose: in this data it abbreviates "Ingegneria"
-# ("Ing. Biomedica") far more often than it precedes an engineer's name.
+# No "Ing.": here it usually means "Ingegneria".
 _HONORIFIC_NAME = re.compile(
     r"(?P<cue>\b(?i:prof\.ssa|professoressa|professore|professor|prof\.?"
     r"|dott\.ssa|dottoressa|dottore|dott\.?|dr\.?"
@@ -132,8 +99,7 @@ def anonymise(text):
 def _anonymise_prose(text):
     text = _EMAIL.sub(_replace_email, text)
     text = _TAX_CODE.sub("[TAX_CODE]", text)
-    # Student IDs with a cue go before phones, which could otherwise claim a
-    # ten-digit matricola; bare matricole go after, since "0039..." is a phone.
+    # Order matters: matricole with a cue, phones, then bare matricole.
     text = _STUDENT_ID_WITH_CUE.sub(r"\g<cue>[STUDENT_ID]", text)
     text = _ITALIAN_PHONE.sub(_replace_italian_phone, text)
     text = _INTERNATIONAL_PHONE.sub("[PHONE]", text)
@@ -150,9 +116,7 @@ def _replace_email(match):
 
 
 def _replace_italian_phone(match):
-    # The pattern only finds candidates; the length decides. Without a
-    # prefix, nine digits at least: an eight-digit date such as 03.12.2024
-    # starts with 0 too.
+    # Without a prefix, at least nine digits, so dates are not taken.
     digits = sum(ch.isdigit() for ch in match.group(0))
     if match.group("prefix"):
         digits -= 2 + (2 if match.group("prefix").startswith("00") else 0)

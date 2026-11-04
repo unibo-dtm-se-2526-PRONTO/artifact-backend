@@ -40,6 +40,26 @@ docker compose exec backend python manage.py rebuild_faq_index
 
 `docker compose down -v` deletes the database volume.
 
+### From PyPI
+
+```bash
+pip install pronto-helpdesk
+```
+
+The package installs the `pronto-helpdesk` command, which runs the same
+commands as `manage.py` (`python -m pronto` works too). It reads the `.env` of
+the folder it runs from (see [Configuration](#configuration)) and needs a
+PostgreSQL database:
+
+```bash
+pronto-helpdesk migrate
+pronto-helpdesk seed_offices
+pronto-helpdesk runserver
+```
+
+The package contains the API and the admin site; the web app is released
+separately.
+
 ## Tests
 
 ```bash

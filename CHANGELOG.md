@@ -1,3 +1,22 @@
+## [1.1.0](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.0.2...1.1.0) (2026-11-04)
+
+### Features
+
+* **cli:** add the pronto-helpdesk command and read the .env of the current folder ([a30dfe3](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/a30dfe323bbd8b33825bfbfa276fed9dab3178e1))
+
+### Dependency updates
+
+* **deps:** bump django from 5.2.18 to 5.2.19 ([98aeb24](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/98aeb24a28f8487db477dc916b1a2daa8b721f75))
+
+### Documentation
+
+* **readme:** explain how to run the package installed from PyPI ([81f9185](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/81f9185c7849fa6f0eceff662ca9e5efd7fd69cd))
+
+### General maintenance
+
+* **deps-dev:** bump mypy from 2.4.0 to 2.4.1 ([2fe57b5](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/2fe57b59550f418244a3be30345e43a8d63d423a))
+* **deps-dev:** bump pytest-django from 4.12.0 to 4.14.0 ([fc0ddc3](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/fc0ddc3d7db62b0bf045efb2aac4dd32f435317c))
+
 ## [1.0.2](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.0.1...1.0.2) (2026-11-04)
 
 ### Dependency updates

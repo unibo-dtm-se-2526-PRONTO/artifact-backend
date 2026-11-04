@@ -14,6 +14,10 @@ authors = ["Sara Ladisa <sara.ladisa@studio.unibo.it>", "Giulio Salotti <giulio.
 license = "Apache-2.0"
 readme = "README.md"
 
+[tool.poetry.scripts]
+# The manage.py commands, for those who install the package
+pronto-helpdesk = "pronto.__main__:main"
+
 [tool.poetry.dependencies]
 # CI and the Dockerfile use Python 3.12
 python = ">= 3.10.0 < 4.0.0"

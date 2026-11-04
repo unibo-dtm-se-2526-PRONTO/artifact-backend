@@ -23,6 +23,9 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# The .env of the folder the command runs from, then the one of the project.
+# Once installed from PyPI, BASE_DIR is site-packages. The first value read wins.
+load_dotenv(Path.cwd() / ".env")
 load_dotenv(BASE_DIR / ".env")
 
 TESTING = "PYTEST_VERSION" in os.environ or "test" in sys.argv

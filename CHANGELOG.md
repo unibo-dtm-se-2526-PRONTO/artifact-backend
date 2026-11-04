@@ -1,3 +1,39 @@
+## [1.0.2](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.0.1...1.0.2) (2026-11-04)
+
+### Dependency updates
+
+* **deps:** bump fastembed from 0.8.1 to 0.9.0 ([55a3c15](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/55a3c155ed90242cd34508dd3fa8d715d5242b91))
+* **deps:** bump fastembed from 0.9.0 to 0.9.1 ([62880ce](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/62880ce7c1e49f458d431830720227e07f8b2114))
+* **deps:** bump python-dotenv from 1.2.2 to 1.2.4 ([b238da4](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/b238da450a426e1b37d8b0cec8a5addf716e6d0c))
+
+### Bug Fixes
+
+* sort imports and ignore RUF012 ahead of ruff 0.17 ([a32de08](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/a32de089f4ada090ebf1895fa1c002e3280c9b20))
+
+### Tests
+
+* **booking:** keep past appointments in the past on Monday mornings ([d204d85](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/d204d85724f6bfed69620c7b2562bfc9b6238764))
+
+### Build and continuous integration
+
+* **deps:** bump actions/checkout from 6 to 7 ([178ae2c](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/178ae2c55abd918b55640d0fec24fbd1e71e0943))
+* **deps:** bump actions/setup-node from 6 to 7 ([1a7ac38](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/1a7ac38d3709437100fe823dd7fc8a19e4020bf7))
+* **deps:** bump actions/setup-python from 6 to 7 ([34c30ea](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/34c30ea769a0fe03cd0e312797ab7d73b8db8ecb))
+* give each branch its own release concurrency group ([7259dcf](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/7259dcf900ed58c444c76a4d08334c75ca077c8b))
+* **release:** publish to TestPyPI then PyPI and push the Docker image to GHCR ([452f035](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/452f03588019edb6a5204d066bdfd5cc67da4ff7))
+* replace Renovate with Dependabot ([dd70ad2](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/dd70ad2ce18a02a8b444e8cc62aefd1d99aab5d5))
+* run CI/CD on develop after merging a Dependabot update ([c57c67f](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/c57c67f2532c3da2bad1df994243affc85e24ace))
+
+### General maintenance
+
+* **deps-dev:** bump coverage from 7.14.0 to 7.16.2 ([e34dc6e](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/e34dc6e07a3ff96f4270d157e7aa6bfcea06de0f))
+* **deps-dev:** bump mypy from 1.20.2 to 2.4.0 ([d66758c](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/d66758ce1c6182ac5918c89dfd877175390c38e7))
+* **deps-dev:** bump poethepoet from 0.37.0 to 0.49.0 ([fed63dc](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/fed63dc1446bc741ed1dfe7f505e4496a96eaeb7))
+* **deps-dev:** bump pytest from 8.4.2 to 9.2.0 ([84ac279](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/84ac2799a9cff27e68f3b394abc99c679bcf16b9))
+* **deps-dev:** bump ruff from 0.15.12 to 0.17.2 ([ef1ddf8](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/ef1ddf8038524ce381932c543aac5ef90713a943))
+* **deps-dev:** bump ruff from 0.17.2 to 0.17.3 ([83ef8c4](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/83ef8c4d9e9592f36b7db690128b3fa37aa80832))
+* shorten comments and docstrings ([901af94](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/901af94daf0c73fedb3d3825795a53039982eb52))
+
 ## [1.0.1](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.0.0...1.0.1) (2026-10-25)
 
 ### Bug Fixes

@@ -1,3 +1,18 @@
+## [1.2.0](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.1.0...1.2.0) (2026-11-10)
+
+### Features
+
+* **docker:** run the whole application from the released images ([4dc6807](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/4dc6807975687f3956a16a11380914439ac10997))
+
+### Dependency updates
+
+* **deps:** bump psycopg from 3.3.4 to 3.3.8 ([374160b](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/374160b8ad1c0a10935a284e04f48da236686cf6))
+
+### General maintenance
+
+* **deps-dev:** bump ruff from 0.17.3 to 0.17.4 ([4c690b2](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/4c690b2bb458f7ee2b5e62713c0675ccf4898449))
+* **deps-dev:** bump semantic-release-preconfigured-conventional-commits ([5d0b2d9](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/5d0b2d90505793b3415cfb31f51dc7a94b188e06))
+
 ## [1.1.0](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.0.2...1.1.0) (2026-11-04)
 
 ### Features

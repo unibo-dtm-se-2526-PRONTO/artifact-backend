@@ -1,0 +1,88 @@
+# The whole of PRONTO from the released images, with nothing to build:
+#
+#   docker compose -f docker-compose.release.yml up -d
+#
+# then open http://localhost:8080. docker-compose.yml is the one for
+# development, which builds the sources instead.
+
+# Its own project name, so it never shares containers or volumes with the
+# development compose.
+name: pronto
+
+services:
+  # PostgreSQL, reachable only from the other services.
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pronto
+      POSTGRES_USER: pronto
+      POSTGRES_PASSWORD: pronto
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pronto -d pronto"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  # Vector store for semantic FAQ matching; same version as docker-compose.yml.
+  chroma:
+    image: chromadb/chroma:1.5.9
+    volumes:
+      - chromadata:/data
+    healthcheck:
+      # No curl or wget in the image.
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  # The API, published on GHCR by each release of this repository. The
+  # frontend proxies to it, so it publishes no port.
+  backend:
+    image: ghcr.io/unibo-dtm-se-2526-pronto/pronto-helpdesk:${BACKEND_TAG:-latest}
+    # The image's command, plus the offices, which a new database lacks.
+    # seed_offices leaves existing offices as they are.
+    command: >-
+      sh -c "python manage.py migrate
+      && python manage.py seed_offices
+      && python manage.py runserver 0.0.0.0:8000"
+    environment:
+      # A trial on this machine: override SECRET_KEY in the shell or in a .env
+      # next to this file before running it anywhere else.
+      SECRET_KEY: ${SECRET_KEY:-insecure-key-for-local-trial-only}
+      # Debug lets runserver serve the admin's static files.
+      DEBUG: "True"
+      # The host the browser uses, which the frontend passes on.
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      DB_NAME: pronto
+      DB_USER: pronto
+      DB_PASSWORD: pronto
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_SSLMODE: disable
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      # Keeps the downloaded embedding model.
+      FASTEMBED_CACHE_PATH: /fastembed
+    volumes:
+      - fastembed:/fastembed
+    depends_on:
+      db:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+
+  # The web app, published on GHCR by each release of artifact-frontend. Its
+  # nginx forwards /api/, /admin/ and /static/ to http://backend:8000.
+  frontend:
+    image: ghcr.io/unibo-dtm-se-2526-pronto/pronto-helpdesk-frontend:${FRONTEND_TAG:-latest}
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-8080}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  chromadata:
+  fastembed:

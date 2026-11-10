@@ -40,6 +40,37 @@ docker compose exec backend python manage.py rebuild_faq_index
 
 `docker compose down -v` deletes the database volume.
 
+### The released images
+
+`docker-compose.release.yml` runs the whole application from the images each
+release publishes on GHCR, with nothing to clone or build besides this file:
+
+```bash
+docker compose -f docker-compose.release.yml up -d
+```
+
+The web app is then on <http://localhost:8080>; it forwards `/api/`, `/admin/`
+and `/static/` to the backend, which publishes no port of its own. The backend
+applies the migrations and creates the offices at every start. To import and
+index the FAQs:
+
+```bash
+docker compose -f docker-compose.release.yml cp export.xlsx backend:/app/
+docker compose -f docker-compose.release.yml exec backend python manage.py import_faqs export.xlsx
+docker compose -f docker-compose.release.yml exec backend python manage.py rebuild_faq_index
+```
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `BACKEND_TAG`, `FRONTEND_TAG` | `latest` | Image versions, e.g. `1.1.0` |
+| `FRONTEND_HOST_PORT` | `8080` | Port of the web app on this machine |
+| `SECRET_KEY` | a fixed trial key | Set it for anything but a local trial |
+
+The variables are read from the shell or from a `.env` next to the file. The
+project is named `pronto`, so its containers and volumes are separate from the
+development ones; `docker compose -f docker-compose.release.yml down -v`
+deletes its data.
+
 ### From PyPI
 
 ```bash
@@ -152,7 +183,9 @@ Releases are made by semantic-release from `master`, based on
 creates a tag, a GitHub release, an entry in `CHANGELOG.md`, and publishes the
 `pronto-helpdesk` package to TestPyPI, or to PyPI when the repository variable
 `PUBLISH_TO_PYPI` is `true`. The package index token is the `PYPI_TOKEN`
-secret.
+secret. The release also pushes the Docker image
+`ghcr.io/unibo-dtm-se-2526-pronto/pronto-helpdesk`, tagged with the version and
+`latest`, which `docker-compose.release.yml` uses.
 
 ## License
 

@@ -5,8 +5,8 @@ let image = "ghcr.io/unibo-dtm-se-2526-pronto/pronto-helpdesk";
 // A release records the new version in pyproject.toml (`poetry version`) and
 // uploads the package to TestPyPI (the repository declared in poetry.toml);
 // if that succeeds and RELEASE_PYPI is true, it uploads the same files in dist/
-// to PyPI. Then it builds the Docker image and pushes it to GHCR as <version>
-// and latest. Poetry reads the tokens from POETRY_PYPI_TOKEN_TESTPYPI and
+// to PyPI. Then it builds the Docker image for amd64 and arm64 (Apple Silicon)
+// and pushes it to GHCR as <version> and latest. Poetry reads the tokens from POETRY_PYPI_TOKEN_TESTPYPI and
 // POETRY_PYPI_TOKEN_PYPI (deploy.yml), so they never appear in a command.
 let prepareCmd = "poetry version -- \${nextRelease.version}";
 let dryRunFlag = dryRun ? " --dry-run" : "";
@@ -16,14 +16,13 @@ if (pypi) {
     publishCmd += " && poetry publish" + dryRunFlag;
 }
 
-// The label links the package on GHCR to this repository.
-publishCmd += " && docker build"
+// The label links the package on GHCR to this repository. buildx pushes both
+// platforms under one tag; a dry run only builds them.
+publishCmd += " && docker buildx build --platform linux/amd64,linux/arm64"
     + " --label org.opencontainers.image.source=https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend"
-    + ` -t ${image}:\${nextRelease.version} -t ${image}:latest .`;
-
-if (!dryRun) {
-    publishCmd += ` && docker push --all-tags ${image}`;
-}
+    + ` -t ${image}:\${nextRelease.version} -t ${image}:latest`
+    + (dryRun ? "" : " --push")
+    + " .";
 
 import config from 'semantic-release-preconfigured-conventional-commits' with {type: 'json'};
 

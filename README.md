@@ -4,106 +4,115 @@ PRONTO automates the phone helpdesk of the Campus of Cesena. Students look for
 an answer among the FAQs of each office and, when none helps, book an
 appointment with the office's staff.
 
-This is the backend: a Django and Django REST Framework API on PostgreSQL. The
-frontend is a separate Vue repository.
+This repository is the backend, a Django REST API on PostgreSQL. The web app is
+in [artifact-frontend](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-frontend).
 
-## Getting started
+## Run PRONTO
 
-You need Poetry 2.2.1 (the version pinned in the `Dockerfile`).
+The whole application runs from the Docker images published on GHCR. You need
+only [Docker](https://docs.docker.com/get-docker/) with Docker Compose.
 
-```bash
-poetry install
-cp .env.example .env                  # then fill in the values
-poetry run python manage.py migrate
-poetry run python manage.py seed_offices
-poetry run python manage.py import_faqs export.xlsx   # optional
-poetry run python manage.py runserver
-```
-
-### With Docker Compose
+**1. Download the compose file** into an empty folder:
 
 ```bash
-docker compose up --build
+mkdir pronto && cd pronto
+curl -O https://raw.githubusercontent.com/unibo-dtm-se-2526-PRONTO/artifact-backend/master/docker-compose.release.yml
 ```
 
-This starts PostgreSQL (`db`), Chroma (`chroma`), the API on
-<http://localhost:8000> and the frontend on <http://localhost:5173>. The
-frontend is built from `../artifact-frontend`, so clone it next to this
-repository.
-
-On a new database, create the offices and index the FAQs:
-
-```bash
-docker compose exec backend python manage.py seed_offices
-docker compose exec backend python manage.py rebuild_faq_index
-```
-
-`docker compose down -v` deletes the database volume.
-
-### The released images
-
-`docker-compose.release.yml` runs the whole application from the images each
-release publishes on GHCR, with nothing to clone or build besides this file:
+**2. Start PRONTO:**
 
 ```bash
 docker compose -f docker-compose.release.yml up -d
 ```
 
-The web app is then on <http://localhost:8080>; it forwards `/api/`, `/admin/`
-and `/static/` to the backend, which publishes no port of its own. The backend
-applies the migrations and creates the offices at every start. To import and
-index the FAQs:
+The first start downloads the images and takes a few minutes. It starts
+PostgreSQL, Chroma, the backend and the web app, applies the migrations and
+loads the offices and the helpdesk FAQs.
+
+**3. Create the administrator account:**
 
 ```bash
-docker compose -f docker-compose.release.yml cp export.xlsx backend:/app/
-docker compose -f docker-compose.release.yml exec backend python manage.py import_faqs export.xlsx
-docker compose -f docker-compose.release.yml exec backend python manage.py rebuild_faq_index
+docker compose -f docker-compose.release.yml exec backend python manage.py createsuperuser
 ```
 
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `BACKEND_TAG`, `FRONTEND_TAG` | `latest` | Image versions, e.g. `1.1.0` |
-| `FRONTEND_HOST_PORT` | `8080` | Port of the web app on this machine |
-| `SECRET_KEY` | a fixed trial key | Set it for anything but a local trial |
+It asks for an e-mail address, a first and last name and a password.
 
-The variables are read from the shell or from a `.env` next to the file. The
-project is named `pronto`, so its containers and volumes are separate from the
-development ones; `docker compose -f docker-compose.release.yml down -v`
-deletes its data.
+**4. Open <http://localhost:8080>.**
+
+- The admin site is <http://localhost:8080/admin/>: log in with the account
+  of step 3 to edit the FAQs, the offices and the users.
+- Register as a student with an `@studio.unibo.it` address, or as an employee
+  with an `@unibo.it` address. Employees choose their office and add their
+  weekly shifts before students can book them.
+- E-mails are not sent: they are printed in the backend log,
+  `docker compose -f docker-compose.release.yml logs backend`.
+
+**5. Stop PRONTO** with `docker compose -f docker-compose.release.yml down`.
+Add `-v` to delete its data as well.
+
+To pin a version instead of `latest`, set `BACKEND_TAG` and `FRONTEND_TAG`
+(e.g. `BACKEND_TAG=1.2.0`); `FRONTEND_HOST_PORT` changes the port `8080`.
+
+## Other ways to run it
 
 ### From PyPI
+
+The `pronto-helpdesk` package contains the API and the admin site, without the
+web app. It needs Python 3.10 or later and a PostgreSQL database.
 
 ```bash
 pip install pronto-helpdesk
 ```
 
-The package installs the `pronto-helpdesk` command, which runs the same
-commands as `manage.py` (`python -m pronto` works too). It reads the `.env` of
-the folder it runs from (see [Configuration](#configuration)) and needs a
-PostgreSQL database:
+Create a `.env` in the folder you run it from, with at least `SECRET_KEY`,
+`DEBUG=True` and the `DB_*` keys of your database (see
+[Configuration](#configuration)). Then:
 
 ```bash
 pronto-helpdesk migrate
 pronto-helpdesk seed_offices
+pronto-helpdesk seed_faqs
+pronto-helpdesk createsuperuser
 pronto-helpdesk runserver
 ```
 
-The package contains the API and the admin site; the web app is released
-separately.
+The API is on <http://localhost:8000/api/> and the admin site on
+<http://localhost:8000/admin/>.
 
-## Tests
+### From source
+
+For development. You need Docker and
+[Poetry](https://python-poetry.org/) 2.2.1. Clone the backend and the frontend
+side by side:
 
 ```bash
-poetry run poe test              # test suite
-poetry run poe coverage          # suite with coverage
-poetry run poe coverage-report
-poetry run poe static-checks     # ruff and mypy
-poetry run poe format
+git clone https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend.git
+git clone https://github.com/unibo-dtm-se-2526-PRONTO/artifact-frontend.git
+cd artifact-backend
+cp .env.example .env              # set SECRET_KEY and DEBUG=True
+docker compose up --build
 ```
 
-Tests run on an in-memory SQLite database by default. Full-text search and the
-booking concurrency tests need PostgreSQL: they are marked
-`@pytest.mark.postgres` and skipped on SQLite. To run them:
+This builds the sources and starts the API on <http://localhost:8000> and the
+web app on <http://localhost:5173>. On a new database, in a second terminal:
+
+```bash
+docker compose exec backend python manage.py seed_offices
+docker compose exec backend python manage.py seed_faqs
+docker compose exec backend python manage.py createsuperuser
+```
+
+Tests and checks:
+
+```bash
+poetry install
+poetry run poe test               # on in-memory SQLite
+poetry run poe static-checks      # ruff and mypy
+poetry run poe format-check
+```
+
+The full-text and concurrency tests need PostgreSQL and are skipped on SQLite.
+To run them on the `db` container:
 
 ```bash
 docker compose up -d --wait db
@@ -111,81 +120,20 @@ TEST_DATABASE_URL=postgres://pronto:pronto@localhost:5432/pronto?sslmode=disable
     poetry run poe test
 ```
 
-All tests live in `tests/`.
-
 ## Configuration
 
-`.env.example` lists every key.
+The backend reads these keys from the environment or from a `.env` file.
+`.env.example` lists them all.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `SECRET_KEY` | none | Required outside tests |
-| `DEBUG` | `False` | Debug mode |
+| `SECRET_KEY` | none | Required |
+| `DEBUG` | `False` | Debug mode; `True` also serves the admin's static files |
 | `ALLOWED_HOSTS` | empty | Comma-separated, required when `DEBUG` is off |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | | PostgreSQL connection |
 | `DB_SSLMODE` | `require` | `disable` for a local server without SSL |
-| `TEST_DATABASE_URL` | empty | Run the tests on PostgreSQL instead of SQLite |
 | `CHROMA_HOST`, `CHROMA_PORT` | empty, `8000` | Semantic FAQ search; off when `CHROMA_HOST` is empty |
-| `EMAIL_BACKEND` | console | Set to the SMTP backend to send real e-mails (`EMAIL_HOST`, `EMAIL_PORT`, ...) |
-
-## API
-
-Every endpoint needs a token (`Authorization: Token <key>`) unless marked
-public. Endpoints that return stored text accept `?lang=it|en`.
-
-| Method | Path | Who | Description |
-|--------|------|-----|-------------|
-| GET | `/api/health/` | public | Status and version |
-| POST | `/api/auth/register/` | public | Create an account; the role comes from the e-mail domain |
-| POST | `/api/auth/login/` | public | Get a token |
-| POST | `/api/auth/logout/` | token | Delete the token |
-| GET | `/api/auth/me/` | token | Current user |
-| GET | `/api/faqs/` | public | Published FAQs, `?office=<code>` to filter |
-| GET | `/api/faqs/<id>/` | public | One FAQ |
-| POST | `/api/questions/` | student | Ask a question, get the best matching FAQ |
-| POST | `/api/questions/<uuid>/resolve/` | student | Mark the suggested FAQ as helpful |
-| GET | `/api/offices/` | token | Offices taking bookings |
-| GET | `/api/offices/<code>/availability/` | token | Free slots on `?date=YYYY-MM-DD` |
-| GET | `/api/appointments/` | token | The caller's appointments |
-| POST | `/api/appointments/` | student | Book a slot |
-| POST | `/api/appointments/<id>/cancel/` | student, employee | Cancel an appointment |
-| POST | `/api/appointments/<id>/complete/` | employee | Mark an appointment as done |
-| GET, POST | `/api/employee-profile/` | employee | Read or choose the employee's office |
-| GET, POST | `/api/shifts/` | employee | List or add weekly shifts |
-| DELETE | `/api/shifts/<id>/` | employee | Remove a shift |
-
-`@studio.unibo.it` addresses register as students, `@unibo.it` addresses as
-employees. Other domains are refused.
-
-## Project structure
-
-| App | Contents |
-|-----|----------|
-| `pronto` | Settings, URLs, shared enums and permissions |
-| `accounts` | Users, student profiles, registration and login |
-| `offices` | Offices and the `seed_offices` command |
-| `faq` | FAQs, student questions, matching, import and anonymisation |
-| `booking` | Employee profiles, shifts, appointments and e-mail notifications |
-
-FAQ matching tries PostgreSQL full-text search first and falls back to
-semantic search with Chroma. FAQs are managed in the Django admin or imported
-from the helpdesk spreadsheet with `import_faqs`, which anonymises the text and
-leaves the FAQs unpublished.
-
-## CI and releases
-
-GitHub Actions runs the checks and the test suite, on SQLite and on
-PostgreSQL, for every push and pull request. A merge into `develop` also
-applies the migrations to the shared Neon database.
-
-Releases are made by semantic-release from `master`, based on
-[Conventional Commits](https://www.conventionalcommits.org/). Each release
-creates a tag, a GitHub release, an entry in `CHANGELOG.md`, and publishes the
-`pronto-helpdesk` package to TestPyPI, or to PyPI when the repository variable
-`PUBLISH_TO_PYPI` is `true`. The package index token is the `PYPI_TOKEN`
-secret. The release also pushes the Docker image
-`ghcr.io/unibo-dtm-se-2526-pronto/pronto-helpdesk`, tagged with the version and
-`latest`, which `docker-compose.release.yml` uses.
+| `EMAIL_BACKEND` | console | The SMTP backend sends real e-mails (`EMAIL_HOST`, `EMAIL_PORT`, ...) |
 
 ## License
 

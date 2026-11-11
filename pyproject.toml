@@ -1,7 +1,7 @@
 [tool.poetry]
 # The backend only; the frontend is not in the package.
 name = "pronto-helpdesk"
-version = "1.2.0"
+version = "1.3.0"
 packages = [
     { include = "pronto" },
     { include = "accounts" },

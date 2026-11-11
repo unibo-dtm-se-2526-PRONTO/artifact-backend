@@ -1,3 +1,21 @@
+## [1.3.0](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.2.0...1.3.0) (2026-11-11)
+
+### Features
+
+* **faq:** bundle the helpdesk FAQs and load them at start-up ([d242918](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/d242918de593f3913f86df72aacd0bde049b3b4a))
+
+### Bug Fixes
+
+* **docker:** publish the image for arm64 as well as amd64 ([7e2e2bb](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/7e2e2bb93cf165ca241a2f6586bd5d4941c5928d))
+
+### Documentation
+
+* **readme:** rewrite the setup as step-by-step instructions ([0c2b00a](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/0c2b00aac3c8569802f7e1db79c0fed543f1773f))
+
+### General maintenance
+
+* remove the empty uv.lock committed by mistake ([c03c16c](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/commit/c03c16cb546352efd53f165bda190568c169ad0e))
+
 ## [1.2.0](https://github.com/unibo-dtm-se-2526-PRONTO/artifact-backend/compare/1.1.0...1.2.0) (2026-11-10)
 
 ### Features

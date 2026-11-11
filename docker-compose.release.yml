@@ -41,11 +41,12 @@ services:
   # frontend proxies to it, so it publishes no port.
   backend:
     image: ghcr.io/unibo-dtm-se-2526-pronto/pronto-helpdesk:${BACKEND_TAG:-latest}
-    # The image's command, plus the offices, which a new database lacks.
-    # seed_offices leaves existing offices as they are.
+    # The image's command, plus the offices and the FAQs, which a new
+    # database lacks. Both seeds leave existing data as they are.
     command: >-
       sh -c "python manage.py migrate
       && python manage.py seed_offices
+      && python manage.py seed_faqs
       && python manage.py runserver 0.0.0.0:8000"
     environment:
       # A trial on this machine: override SECRET_KEY in the shell or in a .env
